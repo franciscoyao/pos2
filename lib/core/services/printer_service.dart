@@ -2,7 +2,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
-import 'dart:typed_data'; // For Uint8List
+// For Uint8List
 import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;

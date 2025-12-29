@@ -211,6 +211,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                                         imageColor:
                                             Colors.primaries[index %
                                                 Colors.primaries.length],
+                                        isAvailable: item.status == 'active',
                                       );
                                     },
                                   ),
@@ -595,62 +596,79 @@ class _MenuItemCard extends ConsumerWidget {
         border: Border.all(color: Colors.grey.shade200),
       ),
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Image placeholder
-          Expanded(
-            child: Center(
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.fastfood, size: 40, color: Colors.grey),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            item.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Color(0xFF111827),
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '\$${item.price.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Color(0xFF111827),
-                ),
-              ),
-              InkWell(
-                onTap: () {
-                  ref.read(cartProvider.notifier).addItem(item);
-                },
+      child: Opacity(
+        opacity: item.status == 'active' ? 1.0 : 0.5,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image placeholder
+            Expanded(
+              child: Center(
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 80,
+                  height: 80,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade100,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.add, color: Colors.black),
+                  child: const Icon(
+                    Icons.fastfood,
+                    size: 40,
+                    color: Colors.grey,
+                  ),
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              item.name,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Color(0xFF111827),
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '\$${item.price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                if (item.status == 'active')
+                  InkWell(
+                    onTap: () {
+                      ref.read(cartProvider.notifier).addItem(item);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.add, color: Colors.black),
+                    ),
+                  )
+                else
+                  const Text(
+                    'Unavailable',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -699,11 +717,13 @@ class _MostSellingCard extends StatelessWidget {
   final String name;
   final double price;
   final Color imageColor;
+  final bool isAvailable;
 
   const _MostSellingCard({
     required this.name,
     required this.price,
     required this.imageColor,
+    required this.isAvailable,
   });
 
   @override
@@ -717,57 +737,84 @@ class _MostSellingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
+      child: Opacity(
+        opacity: isAvailable ? 1.0 : 0.5,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text('Popular', style: TextStyle(fontSize: 10)),
                 ),
-                child: const Text('Popular', style: TextStyle(fontSize: 10)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            name,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Color(0xFF111827),
+                if (!isAvailable) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Unavailable',
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ),
-          const Spacer(),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '\$${price.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF111827),
-                ),
+            const SizedBox(height: 12),
+            Text(
+              name,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF111827),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+            ),
+            const Spacer(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '\$${price.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF111827),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF111827),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Add',
-                  style: TextStyle(color: Colors.white, fontSize: 10),
-                ),
-              ),
-            ],
-          ),
-        ],
+                if (isAvailable)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF111827),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Add',
+                      style: TextStyle(color: Colors.white, fontSize: 10),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

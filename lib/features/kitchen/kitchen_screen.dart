@@ -16,9 +16,9 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stream = _kitchenOnly
-        ? ref.watch(orderRepositoryProvider).watchOrdersByStation('kitchen')
-        : ref.watch(orderRepositoryProvider).watchAllActiveOrdersWithItems();
+    final stream = ref
+        .watch(orderRepositoryProvider)
+        .watchAllActiveOrdersWithItems();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -88,7 +88,13 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final orders = snapshot.data!;
+          var orders = snapshot.data!;
+          // Client-side filtering to bypass potential SQL join issues
+          if (_kitchenOnly) {
+            orders = orders
+                .where((o) => o.items.any((i) => i.menu.station == 'kitchen'))
+                .toList();
+          }
 
           // Filter by status for columns
           // Assuming 'pending'/'sent' -> New, 'accepted' -> Accepted, 'cooking' -> Cooking, 'ready' -> Ready

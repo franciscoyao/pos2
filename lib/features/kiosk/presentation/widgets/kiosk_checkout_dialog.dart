@@ -23,46 +23,14 @@ class KioskCheckoutDialog extends StatelessWidget {
             const Icon(Icons.payment, size: 64, color: Colors.blue),
             const SizedBox(height: 24),
             const Text(
-              'Payment',
+              'Checkout',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Please complete your payment of \$${totalAmount.toStringAsFixed(2)}',
+              'Please confirm your order and pay at the counter.\nTotal: \$${totalAmount.toStringAsFixed(2)}',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 32),
-            // Mock Payment Options
-            ListTile(
-              leading: const Icon(Icons.credit_card),
-              title: const Text('Credit Card'),
-              trailing: const Icon(
-                Icons.radio_button_checked,
-                color: Colors.blue,
-              ),
-              shape: RoundedRectangleBorder(
-                side: BorderSide(
-                  color: Colors.blue.withValues(alpha: 0.5),
-                  width: 2,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              selected: true,
-              selectedTileColor: Colors.blue.withValues(alpha: 0.05),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.phone_android),
-              title: const Text('Apple Pay / Google Pay'),
-              trailing: const Icon(
-                Icons.radio_button_unchecked,
-                color: Colors.grey,
-              ),
-              shape: RoundedRectangleBorder(
-                side: BorderSide(color: Colors.grey[200]!, width: 1),
-                borderRadius: BorderRadius.circular(12),
-              ),
             ),
             const SizedBox(height: 32),
             Row(
@@ -90,7 +58,7 @@ class KioskCheckoutDialog extends StatelessWidget {
                       elevation: 0,
                     ),
                     child: const Text(
-                      'Pay & Order',
+                      'Confirm & Order',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

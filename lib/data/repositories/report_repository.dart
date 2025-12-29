@@ -41,11 +41,14 @@ class TopSellingItem {
   final int count;
   final double totalRevenue;
 
+  final String status;
+
   TopSellingItem({
     required this.name,
     required this.price,
     required this.count,
     required this.totalRevenue,
+    required this.status,
   });
 }
 
@@ -228,6 +231,7 @@ class ReportRepository {
         price: menuItem.price,
         count: count,
         totalRevenue: revenue,
+        status: menuItem.status,
       );
     }).toList();
   }

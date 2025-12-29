@@ -55,6 +55,7 @@ class CartNotifier extends Notifier<CartState> {
   }
 
   void addItem(MenuItem item) {
+    if (item.status != 'active') return;
     final existingIndex = state.items.indexWhere(
       (i) => i.menuItem.id == item.id,
     );

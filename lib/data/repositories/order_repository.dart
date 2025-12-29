@@ -113,14 +113,24 @@ class OrderRepository {
         .get();
   }
 
-  Future<List<OrderWithDetails>> getOrdersWithDetailsByTable(String tableNumber) async {
-    final query = db.select(db.orders).join([
-      leftOuterJoin(db.orderItems, db.orderItems.orderId.equalsExp(db.orders.id)),
-      leftOuterJoin(db.menuItems, db.menuItems.id.equalsExp(db.orderItems.menuItemId)),
-    ])
-    ..where(db.orders.tableNumber.equals(tableNumber) &
-            db.orders.status.isNotIn(['paid', 'cancelled']));
-            
+  Future<List<OrderWithDetails>> getOrdersWithDetailsByTable(
+    String tableNumber,
+  ) async {
+    final query =
+        db.select(db.orders).join([
+          leftOuterJoin(
+            db.orderItems,
+            db.orderItems.orderId.equalsExp(db.orders.id),
+          ),
+          leftOuterJoin(
+            db.menuItems,
+            db.menuItems.id.equalsExp(db.orderItems.menuItemId),
+          ),
+        ])..where(
+          db.orders.tableNumber.equals(tableNumber) &
+              db.orders.status.isNotIn(['paid', 'cancelled']),
+        );
+
     final rows = await query.get();
     final grouped = <int, OrderWithDetails>{};
 
@@ -132,7 +142,7 @@ class OrderRepository {
       if (!grouped.containsKey(order.id)) {
         grouped[order.id] = OrderWithDetails(order, []);
       }
-      
+
       if (orderItem != null && menuItem != null) {
         grouped[order.id]!.items.add(OrderItemWithMenu(orderItem, menuItem));
       }
@@ -159,8 +169,18 @@ class OrderRepository {
   }
 
   Future<void> updateOrderStatus(int id, String status) {
+    final companion = OrdersCompanion(status: Value(status));
     return (db.update(db.orders)..where((t) => t.id.equals(id))).write(
-      OrdersCompanion(status: Value(status)),
+      status == 'paid' || status == 'completed'
+          ? companion.copyWith(completedAt: Value(DateTime.now()))
+          : companion,
+    );
+  }
+
+  Future<void> markOrdersAsPaid(List<int> orderIds) async {
+    final now = DateTime.now();
+    await (db.update(db.orders)..where((t) => t.id.isIn(orderIds))).write(
+      OrdersCompanion(status: const Value('paid'), completedAt: Value(now)),
     );
   }
 

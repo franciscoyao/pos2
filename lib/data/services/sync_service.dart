@@ -10,7 +10,7 @@ class SyncService {
 
   SyncService(this.db, {String? baseUrl})
     : dio = Dio(),
-      baseUrl = baseUrl ?? 'http://192.168.1.71:3000';
+      baseUrl = baseUrl ?? 'http://192.168.1.75:3000';
 
   Future<void> syncAll() async {
     try {

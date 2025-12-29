@@ -322,6 +322,7 @@ class TableDetailsSidebar extends ConsumerWidget {
                             );
                             final savedPrinters = await printerRepo
                                 .getAllPrinters();
+                            if (!context.mounted) return;
                             // Find receipt printer or fallback
                             final receiptPrinter = savedPrinters.firstWhere(
                               (p) => p.role.contains('receipt'),

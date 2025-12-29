@@ -10,6 +10,12 @@ import 'package:pos_system/features/kiosk/presentation/widgets/kiosk_category_si
 import 'package:pos_system/features/kiosk/presentation/widgets/kiosk_menu_grid.dart';
 import 'package:pos_system/features/kiosk/presentation/widgets/kiosk_cart_drawer.dart';
 import 'package:pos_system/features/kiosk/presentation/widgets/kiosk_checkout_dialog.dart';
+import 'package:pos_system/core/services/printer_service.dart';
+import 'package:pos_system/data/repositories/printer_repository.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:intl/intl.dart';
 
 class KioskScreen extends ConsumerStatefulWidget {
   const KioskScreen({super.key});
@@ -51,14 +57,15 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
     try {
       final orderRepo = ref.read(orderRepositoryProvider);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final orderNumber = 'K-ORD-$timestamp';
 
       final order = OrdersCompanion(
-        orderNumber: drift.Value('K-ORD-$timestamp'),
+        orderNumber: drift.Value(orderNumber),
         tableNumber: const drift.Value('Kiosk 1'),
         type: drift.Value(cart.type),
         totalAmount: drift.Value(cart.total),
         status: const drift.Value('pending'),
-        paymentMethod: const drift.Value('card'),
+        paymentMethod: const drift.Value('pay_at_counter'),
       );
 
       final orderItems = cart.items.map((item) {
@@ -72,8 +79,59 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
 
       await orderRepo.submitOrder(order: order, items: orderItems);
 
+      // --- Print Receipt Logic ---
       if (mounted) {
-        ref.read(cartProvider.notifier).clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Printing Order ticket...')),
+        );
+      }
+
+      try {
+        final printerRepo = ref.read(printerRepositoryProvider);
+        final printerService = ref.read(printerServiceProvider);
+        final savedPrinters = await printerRepo.getAllPrinters();
+
+        final receiptPrinter = savedPrinters.firstWhere(
+          (p) => p.role.contains('receipt'),
+          orElse: () => savedPrinters.firstWhere(
+            (p) => p.role.isEmpty,
+            orElse: () => const Printer(
+              id: -1,
+              name: '',
+              macAddress: '',
+              role: '',
+              status: 'active',
+            ),
+          ),
+        );
+
+        if (receiptPrinter.id != -1) {
+          if (receiptPrinter.macAddress.startsWith('SYSTEM:')) {
+            final pdfBytes = await _generatePdfReceipt(orderNumber, cart);
+            final systemPrinters = await printerService.scanSystemPrinters();
+            try {
+              final targetPrinter = systemPrinters.firstWhere(
+                (p) => p.name == receiptPrinter.name,
+              );
+              printerService.selectSystemPrinter(targetPrinter);
+              await printerService.printPdf(pdfBytes);
+            } catch (e) {
+              await printerService.printPdf(pdfBytes);
+            }
+          } else {
+            final bytes = await _generateEscPosReceipt(orderNumber, cart);
+            await printerService.printEscPosTicket(
+              receiptPrinter.macAddress,
+              bytes,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Printing error: $e');
+      }
+      // ---------------------------
+
+      if (mounted) {
         _showSuccessAnimation();
       }
     } catch (e) {
@@ -90,6 +148,14 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) {
+        // Auto-close after 5 seconds
+        Future.delayed(const Duration(seconds: 5), () {
+          if (context.mounted) {
+            Navigator.of(context).pop(); // Close dialog
+            ref.read(cartProvider.notifier).clear(); // Reset cart
+          }
+        });
+
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
@@ -106,13 +172,13 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
-                const Text('Please collect your receipt.'),
+                const Text('Please pay at the counter.'),
                 const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Close success dialog
-                  },
-                  child: const Text('Start New Order'),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 8),
+                const Text(
+                  'Resetting screen in 5 seconds...',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
@@ -122,11 +188,140 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
     );
   }
 
+  Future<List<int>> _generatePdfReceipt(
+    String orderNumber,
+    CartState cart,
+  ) async {
+    final pdf = pw.Document();
+    final date = DateTime.now();
+
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.roll80,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Center(
+                child: pw.Text(
+                  'POS System',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 10),
+              pw.Text('Order: $orderNumber'),
+              pw.Text('Kiosk Order (Pay at Counter)'),
+              pw.Text('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(date)}'),
+              pw.Divider(),
+              ...cart.items.map(
+                (item) => pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        '${item.quantity}x ${item.menuItem.name}',
+                        style: const pw.TextStyle(fontSize: 10),
+                      ),
+                    ),
+                    pw.Text(
+                      '\$${item.total.toStringAsFixed(2)}',
+                      style: const pw.TextStyle(fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+              pw.Divider(),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'TOTAL',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(
+                    '\$${cart.total.toStringAsFixed(2)}',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 10),
+              pw.Center(
+                child: pw.Text(
+                  'Please pay at counter',
+                  style: const pw.TextStyle(fontSize: 12),
+                ),
+              ),
+              pw.SizedBox(height: 20),
+            ],
+          );
+        },
+      ),
+    );
+    return pdf.save();
+  }
+
+  Future<List<int>> _generateEscPosReceipt(
+    String orderNumber,
+    CartState cart,
+  ) async {
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(PaperSize.mm80, profile);
+    List<int> bytes = [];
+
+    bytes += generator.text(
+      'POS System',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        bold: true,
+        height: PosTextSize.size2,
+        width: PosTextSize.size2,
+      ),
+    );
+    bytes += generator.text(
+      'Order: $orderNumber',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.text(
+      'Pay at Counter',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(1);
+
+    for (var item in cart.items) {
+      bytes += generator.row([
+        PosColumn(text: '${item.quantity}x', width: 2),
+        PosColumn(text: item.menuItem.name, width: 7),
+        PosColumn(
+          text: '\$${item.total.toStringAsFixed(2)}',
+          width: 3,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+    }
+
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'TOTAL: \$${cart.total.toStringAsFixed(2)}',
+      styles: const PosStyles(
+        align: PosAlign.right,
+        bold: true,
+        height: PosTextSize.size2,
+      ),
+    );
+
+    bytes += generator.feed(2);
+    bytes += generator.cut();
+    return bytes;
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriesStream = ref
         .watch(menuRepositoryProvider)
-        .watchCategories();
+        .watchCategories(menuType: 'takeaway');
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -196,6 +391,7 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                                       .watch(menuRepositoryProvider)
                                       .watchItemsByCategory(
                                         _selectedCategoryId!,
+                                        type: 'takeaway',
                                       );
 
                                   return StreamBuilder<List<MenuItem>>(

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_system/core/theme/app_colors.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
+import 'package:pos_system/data/repositories/settings_repository.dart';
+import 'package:pos_system/data/database/database.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final String tableNumber;
@@ -32,8 +34,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       future: ref
           .read(orderRepositoryProvider)
           .getOrdersWithDetailsByTable(widget.tableNumber),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
+      builder: (context, ordersSnapshot) {
+        if (!ordersSnapshot.hasData) {
           return Scaffold(
             backgroundColor: AppColors.surface,
             appBar: AppBar(title: const Text('Checkout')),
@@ -41,7 +43,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         }
 
-        final orders = snapshot.data!;
+        final orders = ordersSnapshot.data!;
         if (orders.isEmpty) {
           return Scaffold(
             backgroundColor: AppColors.surface,
@@ -50,305 +52,170 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
         }
 
-        double subtotal = orders.fold(0, (sum, o) => sum + o.order.totalAmount);
-        double tax = subtotal * 0.10;
-        double service = subtotal * 0.05;
-        double tip = subtotal * _tipPercentage;
-        double total = subtotal + tax + service + tip;
+        // Fetch settings to get dynamic tax and service rates
+        return FutureBuilder<SystemSetting?>(
+          future: ref.read(settingsRepositoryProvider).getSettings(),
+          builder: (context, settingsSnapshot) {
+            if (!settingsSnapshot.hasData) {
+              return Scaffold(
+                backgroundColor: AppColors.surface,
+                appBar: AppBar(title: const Text('Checkout')),
+                body: const Center(child: CircularProgressIndicator()),
+              );
+            }
 
-        return Scaffold(
-          backgroundColor: AppColors.surface,
-          appBar: AppBar(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Checkout'),
-                Text(
-                  'Process payment and finalize order',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.normal,
-                  ),
+            final settings = settingsSnapshot.data;
+            final taxRate = (settings?.taxRate ?? 10.0) / 100;
+            final serviceRate = (settings?.serviceRate ?? 5.0) / 100;
+
+            double subtotal = orders.fold(
+              0,
+              (sum, o) => sum + o.order.totalAmount,
+            );
+            double tax = subtotal * taxRate;
+            double service = subtotal * serviceRate;
+            double tip = subtotal * _tipPercentage;
+            double total = subtotal + tax + service + tip;
+
+            return Scaffold(
+              backgroundColor: AppColors.surface,
+              appBar: AppBar(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Checkout'),
+                    Text(
+                      'Process payment and finalize order',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          body: Row(
-            children: [
-              // Left: Payment Options
-              Expanded(
-                flex: 2,
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildSectionTitle('Split Bill'),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Choose how to divide the payment',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Row(
-                          children: ['None', 'Equal', 'Item', 'Seat', '%'].map((
-                            opt,
-                          ) {
-                            final isSelected = _splitOption == opt;
-                            return Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => _splitOption = opt),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    opt,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: isSelected
-                                          ? FontWeight.w600
-                                          : FontWeight.normal,
-                                      color: isSelected
-                                          ? AppColors.textPrimary
-                                          : AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                      if (_splitOption != 'None')
-                        Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Text(
-                            'Full payment - no split',
+              ),
+              body: Row(
+                children: [
+                  // Left: Payment Options
+                  Expanded(
+                    flex: 2,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildSectionTitle('Split Bill'),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Choose how to divide the payment',
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.textSecondary,
                             ),
                           ),
-                        ),
-                      const SizedBox(height: 32),
-                      _buildSectionTitle('Payment Method'),
-                      const SizedBox(height: 16),
-                      _buildPaymentOption(
-                        'Cash',
-                        Icons.payments_outlined,
-                        _paymentMethod == 'Cash',
-                        () => setState(() => _paymentMethod = 'Cash'),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildPaymentOption(
-                        'Card',
-                        Icons.credit_card,
-                        _paymentMethod == 'Card',
-                        () => setState(() => _paymentMethod = 'Card'),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildPaymentOption(
-                        'Mixed (Cash + Card)',
-                        Icons.account_balance_wallet,
-                        _paymentMethod == 'Mixed',
-                        () => setState(() => _paymentMethod = 'Mixed'),
-                      ),
-                      if (_paymentMethod == 'Cash' ||
-                          _paymentMethod == 'Mixed') ...[
-                        const SizedBox(height: 24),
-                        Text(
-                          'Cash Received',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _cashController,
-                          decoration: InputDecoration(
-                            hintText: 'Enter amount',
-                            prefixText: '\$',
-                            prefixStyle: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontWeight: FontWeight.w600,
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.border),
                             ),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-
-              // Right: Order Summary
-              Container(
-                width: 400,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border(left: BorderSide(color: AppColors.border)),
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Order Summary',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Table ${widget.tableNumber}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            ...orders.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final orderDetails = entry.value;
-                              final order = orderDetails.order;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 16),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${index + 1}x',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: orderDetails.items.map((
-                                          item,
-                                        ) {
-                                          return Text(
-                                            '${item.item.quantity}x ${item.menu.name}',
-                                            style: TextStyle(
-                                              color: AppColors.textPrimary,
+                            child: Row(
+                              children: ['None', 'Equal', 'Item', 'Seat', '%']
+                                  .map((opt) {
+                                    final isSelected = _splitOption == opt;
+                                    return Expanded(
+                                      child: GestureDetector(
+                                        onTap: () =>
+                                            setState(() => _splitOption = opt),
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 10,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? Colors.white
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              6,
                                             ),
-                                          );
-                                        }).toList(),
+                                          ),
+                                          child: Text(
+                                            opt,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                              color: isSelected
+                                                  ? AppColors.textPrimary
+                                                  : AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    Text(
-                                      '\$${order.totalAmount.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                  ],
+                                    );
+                                  })
+                                  .toList(),
+                            ),
+                          ),
+                          if (_splitOption != 'None')
+                            Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Text(
+                                'Full payment - no split',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
                                 ),
-                              );
-                            }),
-                            Divider(color: AppColors.border),
-                            const SizedBox(height: 16),
-                            _buildSummaryRow('Subtotal:', subtotal),
-                            const SizedBox(height: 8),
-                            _buildSummaryRow('Tax (10%):', tax),
-                            const SizedBox(height: 8),
-                            _buildSummaryRow('Service (5%):', service),
-                            const SizedBox(height: 16),
+                              ),
+                            ),
+                          const SizedBox(height: 32),
+                          _buildSectionTitle('Payment Method'),
+                          const SizedBox(height: 16),
+                          _buildPaymentOption(
+                            'Cash',
+                            Icons.payments_outlined,
+                            _paymentMethod == 'Cash',
+                            () => setState(() => _paymentMethod = 'Cash'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildPaymentOption(
+                            'Card',
+                            Icons.credit_card,
+                            _paymentMethod == 'Card',
+                            () => setState(() => _paymentMethod = 'Card'),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildPaymentOption(
+                            'Mixed (Cash + Card)',
+                            Icons.account_balance_wallet,
+                            _paymentMethod == 'Mixed',
+                            () => setState(() => _paymentMethod = 'Mixed'),
+                          ),
+                          if (_paymentMethod == 'Cash' ||
+                              _paymentMethod == 'Mixed') ...[
+                            const SizedBox(height: 24),
                             Text(
-                              'Add Tip',
+                              'Cash Received',
                               style: TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [0.10, 0.15, 0.20].map((pct) {
-                                final isSelected = _tipPercentage == pct;
-                                return Expanded(
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(right: 8.0),
-                                    child: GestureDetector(
-                                      onTap: () => setState(
-                                        () => _tipPercentage =
-                                            _tipPercentage == pct ? 0.0 : pct,
-                                      ),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 10,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? AppColors.primary
-                                              : AppColors.surface,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                          border: Border.all(
-                                            color: isSelected
-                                                ? AppColors.primary
-                                                : AppColors.border,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          '${(pct * 100).toInt()}%',
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : AppColors.textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                            ),
                             const SizedBox(height: 8),
                             TextField(
-                              controller: _tipController,
-                              decoration: const InputDecoration(
-                                hintText: '0',
-                                contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
+                              controller: _cashController,
+                              decoration: InputDecoration(
+                                hintText: 'Enter amount',
+                                prefixText: '\$',
+                                prefixStyle: TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               keyboardType:
@@ -356,60 +223,226 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                     decimal: true,
                                   ),
                             ),
-                            const SizedBox(height: 24),
-                            Divider(color: AppColors.border),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Right: Order Summary
+                  Container(
+                    width: 400,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      border: Border(left: BorderSide(color: AppColors.border)),
+                    ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(24.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Total:',
+                                  'Order Summary',
                                   style: TextStyle(
-                                    fontSize: 20,
+                                    fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                     color: AppColors.textPrimary,
                                   ),
                                 ),
+                                const SizedBox(height: 8),
                                 Text(
-                                  '\$${total.toStringAsFixed(2)}',
+                                  'Table ${widget.tableNumber}',
                                   style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                ...orders.asMap().entries.map((entry) {
+                                  final index = entry.key;
+                                  final orderDetails = entry.value;
+                                  final order = orderDetails.order;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 16),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${index + 1}x',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: orderDetails.items.map((
+                                              item,
+                                            ) {
+                                              return Text(
+                                                '${item.item.quantity}x ${item.menu.name}',
+                                                style: TextStyle(
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        ),
+                                        Text(
+                                          '\$${order.totalAmount.toStringAsFixed(2)}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                                Divider(color: AppColors.border),
+                                const SizedBox(height: 16),
+                                _buildSummaryRow('Subtotal:', subtotal),
+                                const SizedBox(height: 8),
+                                _buildSummaryRow('Tax:', tax),
+                                const SizedBox(height: 8),
+                                _buildSummaryRow('Service:', service),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Add Tip',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
                                     color: AppColors.textPrimary,
                                   ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [0.10, 0.15, 0.20].map((pct) {
+                                    final isSelected = _tipPercentage == pct;
+                                    return Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          right: 8.0,
+                                        ),
+                                        child: GestureDetector(
+                                          onTap: () => setState(
+                                            () => _tipPercentage =
+                                                _tipPercentage == pct
+                                                ? 0.0
+                                                : pct,
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 10,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? AppColors.primary
+                                                  : AppColors.surface,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? AppColors.primary
+                                                    : AppColors.border,
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '${(pct * 100).toInt()}%',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: isSelected
+                                                    ? Colors.white
+                                                    : AppColors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                                const SizedBox(height: 8),
+                                TextField(
+                                  controller: _tipController,
+                                  decoration: const InputDecoration(
+                                    hintText: '0',
+                                    contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
+                                  ),
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                ),
+                                const SizedBox(height: 24),
+                                Divider(color: AppColors.border),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Total:',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      '\$${total.toStringAsFixed(2)}',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: () => _finalizePayment(context, orders),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.textPrimary,
-                            foregroundColor: Colors.white,
                           ),
-                          child: const Text(
-                            'Complete Payment',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () =>
+                                  _finalizePayment(context, orders),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.textPrimary,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text(
+                                'Complete Payment',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
@@ -504,9 +537,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   ) async {
     final repo = ref.read(orderRepositoryProvider);
 
-    for (var details in ordersWithDetails) {
-      await repo.updateOrderStatus(details.order.id, 'paid');
-    }
+    final orderIds = ordersWithDetails.map((o) => o.order.id).toList();
+    await repo.markOrdersAsPaid(orderIds);
 
     if (!context.mounted) return;
 

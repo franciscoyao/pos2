@@ -14,22 +14,39 @@ class MenuRepository {
     db.categories,
   )..where((t) => t.status.isNotValue('deleted'))).get();
 
-  Stream<List<Category>> watchCategories() => (db.select(
-    db.categories,
-  )..where((t) => t.status.isNotValue('deleted'))).watch();
+  Stream<List<Category>> watchCategories({String? menuType}) {
+    var query = db.select(db.categories)
+      ..where((t) => t.status.isNotValue('deleted'));
 
-  Future<List<MenuItem>> getItemsByCategory(int categoryId) {
-    return (db.select(db.menuItems)
-          ..where((t) => t.categoryId.equals(categoryId))
-          ..where((t) => t.status.isNotValue('deleted')))
-        .get();
+    if (menuType != null) {
+      query.where((t) => t.menuType.equals(menuType));
+    }
+
+    return query.watch();
   }
 
-  Stream<List<MenuItem>> watchItemsByCategory(int categoryId) {
-    return (db.select(db.menuItems)
-          ..where((t) => t.categoryId.equals(categoryId))
-          ..where((t) => t.status.isNotValue('deleted')))
-        .watch();
+  Future<List<MenuItem>> getItemsByCategory(int categoryId, {String? type}) {
+    var query = db.select(db.menuItems)
+      ..where((t) => t.categoryId.equals(categoryId))
+      ..where((t) => t.status.isNotValue('deleted'));
+
+    if (type != null) {
+      query.where((t) => t.type.equals(type));
+    }
+
+    return query.get();
+  }
+
+  Stream<List<MenuItem>> watchItemsByCategory(int categoryId, {String? type}) {
+    var query = db.select(db.menuItems)
+      ..where((t) => t.categoryId.equals(categoryId))
+      ..where((t) => t.status.isNotValue('deleted'));
+
+    if (type != null) {
+      query.where((t) => t.type.equals(type));
+    }
+
+    return query.watch();
   }
 
   Future<List<MenuItem>> getAllItems() => (db.select(
