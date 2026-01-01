@@ -17,7 +17,7 @@ export class OrdersController {
     }
 
     @Put(':id')
-    update(@Param('id') id: string, @Body() order: Partial<Order>): Promise<void> {
+    update(@Param('id') id: string, @Body() order: Partial<Order>): Promise<Order> {
         return this.ordersService.update(+id, order);
     }
 }

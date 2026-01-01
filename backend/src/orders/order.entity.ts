@@ -39,8 +39,8 @@ export class Order {
     @Column('float', { default: 0.0 })
     tipAmount: number;
 
-    @Column({ nullable: true })
-    taxNumber: string;
+    @Column({ type: 'varchar', nullable: true })
+    taxNumber: string | null;
 
     @Column({ type: 'timestamp', nullable: true })
     completedAt: Date;

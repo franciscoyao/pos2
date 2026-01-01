@@ -12,7 +12,7 @@ class WebSocketService {
     // Replace with your backend URL.
     // For Android Emulator use 10.0.2.2 instead of localhost
     // For physical device use your machine's LAN IP
-    socket = socket_io.io('http://192.168.1.71:3000', <String, dynamic>{
+    socket = socket_io.io('http://localhost:3000', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });
@@ -33,18 +33,37 @@ class WebSocketService {
 
     socket.on('table:update', (data) {
       debugPrint('Table update received: $data');
-      syncService
-          .syncTables(); // For now, re-sync all or implement specific update
+      if (data != null && data is Map<String, dynamic>) {
+        syncService.upsertRestaurantTable(data);
+      }
+    });
+
+    socket.on('category:update', (data) {
+      debugPrint('Category update received: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        syncService.upsertCategory(data);
+      }
+    });
+
+    socket.on('menu-item:update', (data) {
+      debugPrint('MenuItem update received: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        syncService.upsertMenuItem(data);
+      }
     });
 
     socket.on('order:new', (data) {
       debugPrint('New order received: $data');
-      syncService.syncOrders();
+      if (data != null && data is Map<String, dynamic>) {
+        syncService.upsertOrder(data);
+      }
     });
 
     socket.on('order:update', (data) {
       debugPrint('Order update received: $data');
-      syncService.syncOrders();
+      if (data != null && data is Map<String, dynamic>) {
+        syncService.upsertOrder(data);
+      }
     });
   }
 

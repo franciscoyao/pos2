@@ -10,7 +10,7 @@ export class OrdersService {
     @InjectRepository(Order)
     private ordersRepository: Repository<Order>,
     private eventsGateway: EventsGateway,
-  ) {}
+  ) { }
 
   // Get all orders
   findAll(): Promise<Order[]> {
@@ -50,11 +50,11 @@ export class OrdersService {
       where: { id },
       relations: ['items', 'items.menuItem'],
     });
-    
+
     if (!order) {
       throw new NotFoundException(`Order with ID ${id} not found`);
     }
-    
+
     return order;
   }
 
@@ -71,13 +71,13 @@ export class OrdersService {
   async create(orderData: Partial<Order>): Promise<Order> {
     const newOrder = this.ordersRepository.create(orderData);
     const savedOrder = await this.ordersRepository.save(newOrder);
-    
+
     // Fetch with relations
     const orderWithRelations = await this.findOne(savedOrder.id);
-    
+
     // Emit WebSocket event
     this.eventsGateway.emitNewOrder(orderWithRelations);
-    
+
     return orderWithRelations;
   }
 
@@ -85,27 +85,27 @@ export class OrdersService {
   async update(id: number, orderData: Partial<Order>): Promise<Order> {
     await this.ordersRepository.update(id, orderData);
     const updatedOrder = await this.findOne(id);
-    
+
     // Emit WebSocket event
     this.eventsGateway.emitOrderUpdate(updatedOrder);
-    
+
     return updatedOrder;
   }
 
   // Update order status
   async updateStatus(id: number, status: string): Promise<Order> {
     const order = await this.findOne(id);
-    
+
     if (status === 'completed') {
       order.completedAt = new Date();
     }
-    
+
     order.status = status;
     const updatedOrder = await this.ordersRepository.save(order);
-    
+
     // Emit WebSocket event
     this.eventsGateway.emitOrderUpdate(updatedOrder);
-    
+
     return updatedOrder;
   }
 
@@ -116,18 +116,18 @@ export class OrdersService {
     taxNumber?: string;
   }): Promise<Order> {
     const order = await this.findOne(id);
-    
+
     order.status = 'completed';
     order.completedAt = new Date();
     order.paymentMethod = paymentData.paymentMethod;
     order.tipAmount = paymentData.tipAmount || 0;
-    order.taxNumber = paymentData.taxNumber;
-    
+    order.taxNumber = paymentData.taxNumber || null;
+
     const completedOrder = await this.ordersRepository.save(order);
-    
+
     // Emit WebSocket event
     this.eventsGateway.emitOrderUpdate(completedOrder);
-    
+
     return completedOrder;
   }
 
@@ -140,14 +140,14 @@ export class OrdersService {
   // Get sales statistics
   async getSalesStats(startDate: Date, endDate: Date) {
     const orders = await this.getOrdersByDateRange(startDate, endDate);
-    
+
     const completed = orders.filter(o => o.status === 'completed');
-    
+
     const totalSales = completed.reduce((sum, o) => sum + o.totalAmount, 0);
     const totalTax = completed.reduce((sum, o) => sum + o.taxAmount, 0);
     const totalService = completed.reduce((sum, o) => sum + o.serviceAmount, 0);
     const totalTips = completed.reduce((sum, o) => sum + o.tipAmount, 0);
-    
+
     return {
       totalOrders: completed.length,
       totalSales,

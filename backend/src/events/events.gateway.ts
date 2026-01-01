@@ -47,4 +47,12 @@ export class EventsGateway
     emitNewOrder(order: any) {
         this.server.emit('order:new', order);
     }
+
+    emitCategoryUpdate(category: any) {
+        this.server.emit('category:update', category);
+    }
+
+    emitMenuItemUpdate(menuItem: any) {
+        this.server.emit('menu-item:update', menuItem);
+    }
 }

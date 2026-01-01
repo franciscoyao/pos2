@@ -10,7 +10,7 @@ class SyncService {
 
   SyncService(this.db, {String? baseUrl})
     : dio = Dio(),
-      baseUrl = baseUrl ?? 'http://192.168.1.75:3000';
+      baseUrl = baseUrl ?? 'http://localhost:3000';
 
   Future<void> syncAll() async {
     try {
@@ -145,6 +145,99 @@ class SyncService {
       await dio.put('$baseUrl/tables/$id', data: {'status': status});
     } catch (e) {
       debugPrint('Failed to sync table status upstream: $e');
+    }
+  }
+
+  // Real-time update handlers
+  Future<void> upsertRestaurantTable(Map<String, dynamic> json) async {
+    await db
+        .into(db.restaurantTables)
+        .insertOnConflictUpdate(
+          RestaurantTablesCompanion(
+            id: Value(json['id']),
+            name: Value(json['name']),
+            status: Value(json['status']),
+            x: Value(json['x']),
+            y: Value(json['y']),
+          ),
+        );
+  }
+
+  Future<void> upsertCategory(Map<String, dynamic> json) async {
+    await db
+        .into(db.categories)
+        .insertOnConflictUpdate(
+          CategoriesCompanion(
+            id: Value(json['id']),
+            name: Value(json['name']),
+            menuType: Value(json['menuType']),
+            sortOrder: Value(json['sortOrder']),
+            station: Value(json['station']),
+            status: Value(json['status']),
+          ),
+        );
+  }
+
+  Future<void> upsertMenuItem(Map<String, dynamic> json) async {
+    await db
+        .into(db.menuItems)
+        .insertOnConflictUpdate(
+          MenuItemsCompanion(
+            id: Value(json['id']),
+            code: Value(json['code']),
+            name: Value(json['name']),
+            price: Value(json['price'].toDouble()),
+            categoryId: Value(json['categoryId']),
+            station: Value(json['station']),
+            type: Value(json['type']),
+            status: Value(json['status']),
+            allowPriceEdit: Value(json['allowPriceEdit']),
+          ),
+        );
+  }
+
+  Future<void> upsertOrder(Map<String, dynamic> json) async {
+    // Upsert order
+    await db
+        .into(db.orders)
+        .insertOnConflictUpdate(
+          OrdersCompanion(
+            id: Value(json['id']),
+            orderNumber: Value(json['orderNumber']),
+            tableNumber: Value(json['tableNumber']),
+            type: Value(json['type']),
+            status: Value(json['status']),
+            totalAmount: Value(json['totalAmount'].toDouble()),
+            taxAmount: Value(json['taxAmount']?.toDouble() ?? 0.0),
+            serviceAmount: Value(json['serviceAmount']?.toDouble() ?? 0.0),
+            paymentMethod: Value(json['paymentMethod']),
+            tipAmount: Value(json['tipAmount']?.toDouble() ?? 0.0),
+            taxNumber: Value(json['taxNumber']),
+            completedAt: Value(
+              json['completedAt'] != null
+                  ? DateTime.parse(json['completedAt'])
+                  : null,
+            ),
+          ),
+        );
+
+    // Upsert items if present
+    if (json['items'] != null) {
+      final List<dynamic> items = json['items'];
+      for (var item in items) {
+        await db
+            .into(db.orderItems)
+            .insertOnConflictUpdate(
+              OrderItemsCompanion(
+                id: Value(item['id']),
+                orderId: Value(item['orderId']),
+                menuItemId: Value(item['menuItemId']),
+                quantity: Value(item['quantity']),
+                priceAtTime: Value(item['priceAtTime']?.toDouble() ?? 0.0),
+                status: Value(item['status'] ?? 'pending'),
+              ),
+            );
+      }
     }
   }
 }
