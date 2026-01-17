@@ -4,7 +4,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
+
   // Enable CORS for Flutter app
   app.enableCors({
     origin: '*', // In production, specify your Flutter app's URL
@@ -19,7 +19,7 @@ async function bootstrap() {
   }));
 
   const port = process.env.PORT || 3000;
-  await app.listen(port);
-  console.log(`🚀 Backend running on http://localhost:${port}`);
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Backend running on http://0.0.0.0:${port}`);
 }
 bootstrap();
