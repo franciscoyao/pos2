@@ -10,3 +10,5 @@ services:
         sync: false
       - key: NODE_VERSION
         value: 20.10.0
+      - key: NODE_OPTIONS
+        value: "--dns-result-order=ipv4first"
