@@ -30,4 +30,9 @@ export class CategoriesService {
             this.eventsGateway.emitCategoryUpdate(updatedCategory);
         }
     }
+
+    async remove(id: number): Promise<void> {
+        await this.categoriesRepository.delete(id);
+        // Optionally emit a delete event if needed
+    }
 }

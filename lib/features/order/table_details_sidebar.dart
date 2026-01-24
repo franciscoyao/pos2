@@ -131,7 +131,12 @@ class TableDetailsSidebar extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () async {
+                        final orders = await activeOrdersFuture;
+                        if (context.mounted) {
+                          _showSplitDialog(context, ref, orders, table);
+                        }
+                      },
                       icon: Icon(
                         Icons.call_split,
                         size: 16,
@@ -157,7 +162,7 @@ class TableDetailsSidebar extends ConsumerWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => _showMergeDialog(context, ref, table),
                       icon: Icon(
                         Icons.merge_type,
                         size: 16,
@@ -623,6 +628,222 @@ class TableDetailsSidebar extends ConsumerWidget {
     bytes += generator.cut();
     return bytes;
   }
+
+  void _showMergeDialog(
+    BuildContext context,
+    WidgetRef ref,
+    RestaurantTable currentTable,
+  ) {
+    final TextEditingController tableController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Merge Table ${currentTable.name} into...'),
+        content: TextField(
+          controller: tableController,
+          decoration: InputDecoration(
+            labelText: 'Target Table Number',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (tableController.text.isNotEmpty) {
+                try {
+                  await ref
+                      .read(orderRepositoryProvider)
+                      .mergeTables(currentTable.name, tableController.text);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Tables merged successfully')),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Merge failed: $e')));
+                  }
+                }
+              }
+            },
+            child: Text('Merge'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSplitDialog(
+    BuildContext context,
+    WidgetRef ref,
+    List<OrderWithDetails> orders,
+    RestaurantTable currentTable,
+  ) {
+    // Split selection state
+    final selectedItems = <int, int>{}; // itemId -> quantity
+    final TextEditingController tableController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Split Items to New Table'),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return SizedBox(
+                width: 400,
+                height: 500,
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: tableController,
+                      decoration: InputDecoration(
+                        labelText: 'Target Table Number',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Expanded(
+                      child: ListView(
+                        children: orders.expand((o) => o.items).map((item) {
+                          final isSelected = selectedItems.containsKey(
+                            item.item.id,
+                          );
+                          final selectedQty = selectedItems[item.item.id] ?? 0;
+
+                          return Column(
+                            children: [
+                              CheckboxListTile(
+                                title: Text(item.menu.name),
+                                subtitle: Text('${item.item.quantity}x'),
+                                value: isSelected,
+                                onChanged: (val) {
+                                  setState(() {
+                                    if (val!) {
+                                      selectedItems[item.item.id] =
+                                          item.item.quantity;
+                                    } else {
+                                      selectedItems.remove(item.item.id);
+                                    }
+                                  });
+                                },
+                              ),
+                              if (isSelected && item.item.quantity > 1)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16.0,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.end,
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(Icons.remove_circle_outline),
+                                        onPressed: () {
+                                          setState(() {
+                                            if (selectedQty > 1) {
+                                              selectedItems[item.item.id] =
+                                                  selectedQty - 1;
+                                            } else {
+                                              selectedItems.remove(
+                                                item.item.id,
+                                              );
+                                            }
+                                          });
+                                        },
+                                      ),
+                                      Text(
+                                        '$selectedQty / ${item.item.quantity}',
+                                      ),
+                                      IconButton(
+                                        icon: Icon(Icons.add_circle_outline),
+                                        onPressed: () {
+                                          setState(() {
+                                            if (selectedQty <
+                                                item.item.quantity) {
+                                              selectedItems[item.item.id] =
+                                                  selectedQty + 1;
+                                            }
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (tableController.text.isNotEmpty &&
+                    selectedItems.isNotEmpty) {
+                  try {
+                    // Group by order
+                    final grouped = <int, List<Map<String, dynamic>>>{};
+                    for (var o in orders) {
+                      for (var i in o.items) {
+                        if (selectedItems.containsKey(i.item.id)) {
+                          if (!grouped.containsKey(o.order.id)) {
+                            grouped[o.order.id] = [];
+                          }
+                          grouped[o.order.id]!.add({
+                            'id': i.item.id,
+                            'quantity': selectedItems[i.item.id],
+                          });
+                        }
+                      }
+                    }
+
+                    for (var orderId in grouped.keys) {
+                      await ref
+                          .read(orderRepositoryProvider)
+                          .splitTable(
+                            orderId,
+                            tableController.text,
+                            grouped[orderId]!,
+                          );
+                    }
+
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Split successful')),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Split failed: $e')),
+                      );
+                    }
+                  }
+                }
+              },
+              child: Text('Split'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _OrderCard extends StatelessWidget {
@@ -648,14 +869,18 @@ class _OrderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Order #${order.orderNumber}',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                  color: AppColors.textPrimary,
+              Expanded(
+                child: Text(
+                  'Order #${order.orderNumber}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               Text(
                 timeFormat.format(order.createdAt),
                 style: TextStyle(fontSize: 12, color: AppColors.textSecondary),

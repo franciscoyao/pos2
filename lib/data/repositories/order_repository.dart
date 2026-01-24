@@ -288,6 +288,171 @@ class OrderRepository {
   Future<List<OrderWithDetails>> _getActiveTablesWithDetails() async {
     return [];
   }
+
+  Future<void> payItems(
+    int orderId,
+    List<Map<String, dynamic>> items,
+    String method,
+  ) async {
+    await syncService.payItems(orderId, items, method);
+    // Local DB update will happen via socket event usually,
+    // but we could optimistically update local DB here if we wanted.
+    // For now rely on sync.
+  }
+
+  Future<void> addPayment(int orderId, double amount, String method) async {
+    await syncService.addPayment(orderId, amount, method);
+  }
+
+  Future<void> splitTable(
+    int orderId,
+    String targetTable,
+    List<Map<String, dynamic>> items,
+  ) async {
+    final currentOrder = await (db.select(
+      db.orders,
+    )..where((t) => t.id.equals(orderId))).getSingle();
+
+    String? newOrderNumber;
+
+    // Local Transaction
+    await db.transaction(() async {
+      // 0. Ensure Target Table Exists
+      final existingTable = await (db.select(
+        db.restaurantTables,
+      )..where((t) => t.name.equals(targetTable))).getSingleOrNull();
+
+      if (existingTable == null) {
+        await db
+            .into(db.restaurantTables)
+            .insert(
+              RestaurantTablesCompanion(
+                name: Value(targetTable),
+                status: const Value('occupied'),
+                x: const Value(0), // Default position
+                y: const Value(0),
+              ),
+            );
+      }
+
+      // 1. Find or Create Target Order Locally
+      var targetOrder =
+          await (db.select(db.orders)..where(
+                (t) =>
+                    t.tableNumber.equals(targetTable) &
+                    t.status.isIn(['pending', 'active', 'cooking', 'served']),
+              ))
+              .getSingleOrNull();
+
+      if (targetOrder == null) {
+        // Generate new Order Number locally
+        // Format: Current-Split-Timestamp
+        newOrderNumber =
+            '${currentOrder.orderNumber}-S${DateTime.now().millisecondsSinceEpoch}';
+
+        final newId = await db
+            .into(db.orders)
+            .insert(
+              OrdersCompanion(
+                orderNumber: Value(newOrderNumber!),
+                tableNumber: Value(targetTable),
+                status: const Value('pending'),
+                type: Value(currentOrder.type),
+                waiterId: Value(currentOrder.waiterId),
+              ),
+            );
+
+        targetOrder = await (db.select(
+          db.orders,
+        )..where((t) => t.id.equals(newId))).getSingle();
+      } else {
+        newOrderNumber = targetOrder.orderNumber;
+      }
+
+      // 2. Move Items Locally
+      for (var itemReq in items) {
+        final itemId = itemReq['id'] as int;
+        final qty = itemReq['quantity'] as int;
+
+        final originalItem = await (db.select(
+          db.orderItems,
+        )..where((t) => t.id.equals(itemId))).getSingle();
+
+        if (originalItem.quantity == qty) {
+          // Move full item
+          await (db.update(db.orderItems)..where((t) => t.id.equals(itemId)))
+              .write(OrderItemsCompanion(orderId: Value(targetOrder.id)));
+        } else {
+          // Split item
+          // Decrease original
+          await (db.update(
+            db.orderItems,
+          )..where((t) => t.id.equals(itemId))).write(
+            OrderItemsCompanion(quantity: Value(originalItem.quantity - qty)),
+          );
+
+          // Create new item in target
+          await db
+              .into(db.orderItems)
+              .insert(
+                originalItem
+                    .toCompanion(true)
+                    .copyWith(
+                      id: const Value.absent(), // New ID
+                      orderId: Value(targetOrder.id),
+                      quantity: Value(qty),
+                    ),
+              );
+        }
+      }
+
+      // 3. Recalculate Totals (Simplified for brevity, ideally should sum items)
+      // For now, let's trigger a full sync or just rely on next fetch?
+      // Or we can manually calc totals if we want precision offline.
+      // Let's manually sum up items for both orders to be safe.
+      await _recalculateOrderTotal(currentOrder.id);
+      await _recalculateOrderTotal(targetOrder.id);
+
+      // Check if source order empty
+      final sourceCount =
+          await (db.select(db.orderItems)
+                ..where((t) => t.orderId.equals(currentOrder.id)))
+              .get()
+              .then((l) => l.length);
+
+      if (sourceCount == 0) {
+        await (db.delete(
+          db.orders,
+        )..where((t) => t.id.equals(currentOrder.id))).go();
+      }
+    });
+
+    // Sync Upstream (Fire and Forget)
+    // Pass the newOrderNumber so backend creates same ID
+    await syncService.splitTable(
+      currentOrder.orderNumber,
+      targetTable,
+      items,
+      newOrderNumber: newOrderNumber,
+    );
+  }
+
+  Future<void> _recalculateOrderTotal(int orderId) async {
+    final items = await (db.select(
+      db.orderItems,
+    )..where((t) => t.orderId.equals(orderId))).get();
+    final total = items.fold(
+      0.0,
+      (sum, item) => sum + (item.priceAtTime * item.quantity),
+    );
+    await (db.update(db.orders)..where((t) => t.id.equals(orderId))).write(
+      OrdersCompanion(totalAmount: Value(total)),
+    );
+  }
+
+  Future<void> mergeTables(String fromTable, String toTable) async {
+    await syncService.mergeTables(fromTable, toTable);
+  }
 }
 
 class OrderItemWithMenu {

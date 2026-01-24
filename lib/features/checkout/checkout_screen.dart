@@ -21,6 +21,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _cashController = TextEditingController();
   final _tipController = TextEditingController();
 
+  // Split State
+  final Map<int, int> _selectedItems = {};
+  int _splitCount = 2;
+
   @override
   void dispose() {
     _cashController.dispose();
@@ -162,18 +166,158 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                   .toList(),
                             ),
                           ),
-                          if (_splitOption != 'None')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 12),
-                              child: Text(
-                                'Full payment - no split',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSecondary,
+                          if (_splitOption != 'None') ...[
+                            const SizedBox(height: 16),
+                            if (_splitOption == 'Equal') ...[
+                              Text(
+                                'Number of People',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    onPressed: () => setState(
+                                      () => _splitCount = (_splitCount > 2)
+                                          ? _splitCount - 1
+                                          : 2,
+                                    ),
+                                    icon: Icon(Icons.remove),
+                                  ),
+                                  Text(
+                                    '$_splitCount',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    onPressed: () =>
+                                        setState(() => _splitCount++),
+                                    icon: Icon(Icons.add),
+                                  ),
+                                ],
+                              ),
+                            ] else if (_splitOption == 'Item') ...[
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: AppColors.border),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                height: 300,
+                                child: ListView.builder(
+                                  itemCount: orders
+                                      .expand((o) => o.items)
+                                      .length,
+                                  itemBuilder: (context, index) {
+                                    final item = orders
+                                        .expand((o) => o.items)
+                                        .toList()[index];
+                                    final isPaid = item.item.status == 'paid';
+                                    final isSelected = _selectedItems
+                                        .containsKey(item.item.id);
+                                    final selectedQty =
+                                        _selectedItems[item.item.id] ?? 0;
+
+                                    return Column(
+                                      children: [
+                                        CheckboxListTile(
+                                          title: Text(item.menu.name),
+                                          subtitle: Text(
+                                            '\$${(item.item.priceAtTime * item.item.quantity).toStringAsFixed(2)} '
+                                            '(${item.item.quantity}x)',
+                                          ),
+                                          value: isPaid ? true : isSelected,
+                                          onChanged: isPaid
+                                              ? null
+                                              : (val) {
+                                                  setState(() {
+                                                    if (val!) {
+                                                      _selectedItems[item
+                                                              .item
+                                                              .id] =
+                                                          item.item.quantity;
+                                                    } else {
+                                                      _selectedItems.remove(
+                                                        item.item.id,
+                                                      );
+                                                    }
+                                                  });
+                                                },
+                                          enabled: !isPaid,
+                                        ),
+                                        if (isSelected &&
+                                            item.item.quantity > 1)
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 16.0,
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.end,
+                                              children: [
+                                                IconButton(
+                                                  icon: Icon(
+                                                    Icons.remove_circle_outline,
+                                                  ),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      if (selectedQty > 1) {
+                                                        _selectedItems[item
+                                                                .item
+                                                                .id] =
+                                                            selectedQty - 1;
+                                                      } else {
+                                                        _selectedItems.remove(
+                                                          item.item.id,
+                                                        );
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                                Text(
+                                                  '$selectedQty / ${item.item.quantity}',
+                                                ),
+                                                IconButton(
+                                                  icon: Icon(
+                                                    Icons.add_circle_outline,
+                                                  ),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      if (selectedQty <
+                                                          item.item.quantity) {
+                                                        _selectedItems[item
+                                                                .item
+                                                                .id] =
+                                                            selectedQty + 1;
+                                                      }
+                                                    });
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
+                            ],
+                          ],
+
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Text(
+                              _splitOption == 'None'
+                                  ? 'Full payment - no split'
+                                  : 'Methods',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
-                          const SizedBox(height: 32),
+                          ),
+                          const SizedBox(height: 16),
                           _buildSectionTitle('Payment Method'),
                           const SizedBox(height: 16),
                           _buildPaymentOption(
@@ -400,14 +544,48 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
-                                    Text(
-                                      '\$${total.toStringAsFixed(2)}',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textPrimary,
+                                    if (_splitOption == 'Equal')
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '\$${total.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              decoration:
+                                                  TextDecoration.lineThrough,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                          Text(
+                                            '\$${(total / _splitCount).toStringAsFixed(2)} / person',
+                                            style: TextStyle(
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.primary,
+                                            ),
+                                          ),
+                                        ],
+                                      )
+                                    else if (_splitOption == 'Item')
+                                      Text(
+                                        '\$${orders.expand((o) => o.items).where((i) => _selectedItems.containsKey(i.item.id)).fold(0.0, (sum, i) => sum + (i.item.priceAtTime * (_selectedItems[i.item.id] ?? 0))).toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      )
+                                    else
+                                      Text(
+                                        '\$${total.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.textPrimary,
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ],
@@ -536,18 +714,88 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     List<OrderWithDetails> ordersWithDetails,
   ) async {
     final repo = ref.read(orderRepositoryProvider);
+    final total = ordersWithDetails.fold(
+      0.0,
+      (sum, o) => sum + o.order.totalAmount,
+    ); // Simplified total
 
-    final orderIds = ordersWithDetails.map((o) => o.order.id).toList();
-    await repo.markOrdersAsPaid(orderIds);
+    try {
+      if (_splitOption == 'Item') {
+        if (_selectedItems.isEmpty) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Please select items to pay')));
+          return;
+        }
 
-    if (!context.mounted) return;
+        final groupedItems = <int, List<Map<String, dynamic>>>{};
+        for (var orderDetail in ordersWithDetails) {
+          for (var item in orderDetail.items) {
+            if (_selectedItems.containsKey(item.item.id)) {
+              if (!groupedItems.containsKey(orderDetail.order.id)) {
+                groupedItems[orderDetail.order.id] = [];
+              }
+              groupedItems[orderDetail.order.id]!.add({
+                'id': item.item.id,
+                'quantity': _selectedItems[item.item.id],
+              });
+            }
+          }
+        }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Payment processed & Receipt Printed'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    Navigator.of(context).pop();
+        for (var orderId in groupedItems.keys) {
+          await repo.payItems(orderId, groupedItems[orderId]!, _paymentMethod);
+        }
+      } else if (_splitOption == 'Equal') {
+        final amountPerPerson = total / _splitCount;
+        // Pay equal amount on FIRST order (or distribute? Distributing is hard).
+        // We will just add payment to the first order for now, backend `addPayment` logic
+        // might need to handle "Table Payment" if we want to be robust.
+        // Current backend `addPayment` is per Order.
+        // If we have multiple orders, we should probably merge them first or just pick one.
+        // Let's pick the first one for payment.
+        if (ordersWithDetails.isNotEmpty) {
+          await repo.addPayment(
+            ordersWithDetails.first.order.id,
+            amountPerPerson,
+            _paymentMethod,
+          );
+        }
+      } else {
+        // Full Payment
+        final orderIds = ordersWithDetails.map((o) => o.order.id).toList();
+        await repo.markOrdersAsPaid(
+          orderIds,
+        ); // Old method, maybe replace with addPayment(total)
+      }
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _splitOption == 'None'
+                ? 'Payment processed'
+                : 'Partial Payment processed',
+          ),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      if (_splitOption == 'None') {
+        Navigator.of(context).pop();
+      } else {
+        // If partial, maybe stay? Or refresh?
+        // Refresh happens auto via stream.
+        setState(() {
+          _selectedItems.clear();
+        });
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Payment Failed: $e')));
+      }
+    }
   }
 }

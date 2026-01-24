@@ -20,6 +20,7 @@ import { UsersModule } from './users/users.module';
           url: process.env.DATABASE_URL,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: true,
+          logging: true,
           ssl: { rejectUnauthorized: false },
         }
         : {
@@ -31,6 +32,7 @@ import { UsersModule } from './users/users.module';
           database: process.env.DB_NAME,
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: true,
+          logging: true,
           ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
         },
     ),

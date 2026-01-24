@@ -1,5 +1,6 @@
 import { Entity, Column, PrimaryGeneratedColumn, OneToMany, CreateDateColumn } from 'typeorm';
 import { OrderItem } from './order-item.entity';
+import { Payment } from './payment.entity';
 
 @Entity('orders')
 export class Order {
@@ -47,4 +48,10 @@ export class Order {
 
     @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
     items: OrderItem[];
+
+    @OneToMany(() => Payment, (payment) => payment.order, { cascade: true })
+    payments: Payment[];
+
+    @Column('float', { default: 0.0 })
+    paidAmount: number;
 }

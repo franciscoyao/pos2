@@ -55,6 +55,15 @@ class SettingsRepository {
     await db.delete(db.orderItems).go();
     await db.delete(db.orders).go();
     await db.delete(db.restaurantTables).go();
+
+    // Reset auto-increment counters
+    await db.customStatement(
+      "DELETE FROM sqlite_sequence WHERE name='order_items'",
+    );
+    await db.customStatement("DELETE FROM sqlite_sequence WHERE name='orders'");
+    await db.customStatement(
+      "DELETE FROM sqlite_sequence WHERE name='restaurant_tables'",
+    );
   }
 }
 

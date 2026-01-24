@@ -59,4 +59,8 @@ export class EventsGateway
     emitUserUpdate(user: any) {
         this.server.emit('user:update', user);
     }
+
+    emitOrderDelete(orderId: number) {
+        this.server.emit('order:delete', { id: orderId });
+    }
 }

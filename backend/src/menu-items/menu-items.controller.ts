@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Body, Put, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Put, Param, Delete } from '@nestjs/common';
 import { MenuItemsService } from './menu-items.service';
 import { MenuItem } from './menu-item.entity';
+import { CreateMenuItemDto } from './dto/create-menu-item.dto';
+import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
 
 @Controller('menu-items')
 export class MenuItemsController {
@@ -12,12 +14,17 @@ export class MenuItemsController {
     }
 
     @Post()
-    create(@Body() menuItem: MenuItem): Promise<MenuItem> {
-        return this.menuItemsService.create(menuItem);
+    create(@Body() createMenuItemDto: CreateMenuItemDto): Promise<MenuItem> {
+        return this.menuItemsService.create(createMenuItemDto as MenuItem);
     }
 
     @Put(':id')
-    update(@Param('id') id: string, @Body() menuItem: Partial<MenuItem>): Promise<void> {
-        return this.menuItemsService.update(+id, menuItem);
+    update(@Param('id') id: string, @Body() updateMenuItemDto: UpdateMenuItemDto): Promise<void> {
+        return this.menuItemsService.update(+id, updateMenuItemDto);
+    }
+
+    @Delete(':id')
+    remove(@Param('id') id: string): Promise<void> {
+        return this.menuItemsService.remove(+id);
     }
 }

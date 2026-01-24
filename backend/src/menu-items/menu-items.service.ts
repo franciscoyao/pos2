@@ -33,4 +33,9 @@ export class MenuItemsService {
             this.eventsGateway.emitMenuItemUpdate(updatedItem);
         }
     }
+
+    async remove(id: number): Promise<void> {
+        await this.menuItemsRepository.delete(id);
+        // Optionally emit a delete event if needed
+    }
 }

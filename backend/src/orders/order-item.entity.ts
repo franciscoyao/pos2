@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn } from 'typeorm';
 import { Order } from './order.entity';
 import { MenuItem } from '../menu-items/menu-item.entity';
+import { Payment } from './payment.entity';
 
 @Entity('order_items')
 export class OrderItem {
@@ -28,5 +29,12 @@ export class OrderItem {
     priceAtTime: number;
 
     @Column({ default: 'pending' })
-    status: string;
+    status: string; // 'pending', 'cooking', 'served', 'paid'
+
+    @Column({ nullable: true })
+    paymentId: number;
+
+    @ManyToOne(() => Payment)
+    @JoinColumn({ name: 'paymentId' })
+    payment: Payment;
 }
