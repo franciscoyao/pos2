@@ -20,7 +20,8 @@ class SyncService {
   }
 
   void initRealtimeUpdates() {
-    socket = socket_io.io(baseUrl, <String, dynamic>{
+    // Connect to the /sync namespace
+    socket = socket_io.io('$baseUrl/sync', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
     });
@@ -74,11 +75,11 @@ class SyncService {
   Future<void> syncAll() async {
     try {
       // 1. Fetch all data first
-      final tableRes = await dio.get('$baseUrl/tables');
-      final catRes = await dio.get('$baseUrl/categories');
-      final itemRes = await dio.get('$baseUrl/menu-items');
-      final orderRes = await dio.get('$baseUrl/orders/sync');
-      final userRes = await dio.get('$baseUrl/users');
+      final tableRes = await dio.get('$baseUrl/api/v1/tables');
+      final catRes = await dio.get('$baseUrl/api/v1/categories');
+      final itemRes = await dio.get('$baseUrl/api/v1/menu-items');
+      final orderRes = await dio.get('$baseUrl/api/v1/orders/sync');
+      final userRes = await dio.get('$baseUrl/api/v1/users');
 
       final tableData = tableRes.data as List<dynamic>;
       final catData = catRes.data as List<dynamic>;
@@ -217,28 +218,28 @@ class SyncService {
 
   // Wrappers
   Future<void> syncTables() async {
-    final response = await dio.get('$baseUrl/tables');
+    final response = await dio.get('$baseUrl/api/v1/tables');
     final data = response.data as List<dynamic>;
     await _cleanupTables(data);
     await _upsertTablesBatch(data);
   }
 
   Future<void> syncCategories() async {
-    final response = await dio.get('$baseUrl/categories');
+    final response = await dio.get('$baseUrl/api/v1/categories');
     final data = response.data as List<dynamic>;
     await _cleanupCategories(data);
     await _upsertCategoriesBatch(data);
   }
 
   Future<void> syncMenuItems() async {
-    final response = await dio.get('$baseUrl/menu-items');
+    final response = await dio.get('$baseUrl/api/v1/menu-items');
     final data = response.data as List<dynamic>;
     await _cleanupMenuItems(data);
     await _upsertMenuItemsBatch(data);
   }
 
   Future<void> syncOrders() async {
-    final response = await dio.get('$baseUrl/orders/sync');
+    final response = await dio.get('$baseUrl/api/v1/orders/sync');
     final data = response.data as List<dynamic>;
     await _cleanupOrders(data);
     await _upsertOrdersBatch(data);
@@ -246,7 +247,7 @@ class SyncService {
 
   Future<void> syncUsers() async {
     // Users usually purely additive or status update, but we can add cleanup if stricter sync needed
-    await _upsertUsersBatch((await dio.get('$baseUrl/users')).data);
+    await _upsertUsersBatch((await dio.get('$baseUrl/api/v1/users')).data);
   }
 
   Future<void> createOrder(
@@ -270,7 +271,7 @@ class SyncService {
             )
             .toList(),
       };
-      await dio.post('$baseUrl/orders', data: orderJson);
+      await dio.post('$baseUrl/api/v1/orders', data: orderJson);
     } catch (e) {
       debugPrint('Failed to sync order upstream: $e');
     }
@@ -278,7 +279,7 @@ class SyncService {
 
   Future<void> updateTableStatus(int id, String status) async {
     try {
-      await dio.put('$baseUrl/tables/$id', data: {'status': status});
+      await dio.put('$baseUrl/api/v1/tables/$id', data: {'status': status});
     } catch (e) {
       debugPrint('Failed to sync table status upstream: $e');
     }
@@ -286,7 +287,7 @@ class SyncService {
 
   Future<void> updateOrderStatus(int id, String status) async {
     try {
-      await dio.put('$baseUrl/orders/$id', data: {'status': status});
+      await dio.put('$baseUrl/api/v1/orders/$id', data: {'status': status});
     } catch (e) {
       debugPrint('Failed to sync order status upstream: $e');
     }
@@ -299,7 +300,7 @@ class SyncService {
   ) async {
     try {
       await dio.post(
-        '$baseUrl/orders/$orderId/pay-items',
+        '$baseUrl/api/v1/orders/$orderId/pay-items',
         data: {'items': items, 'paymentMethod': method},
       );
     } catch (e) {
@@ -311,7 +312,7 @@ class SyncService {
   Future<void> addPayment(int orderId, double amount, String method) async {
     try {
       await dio.post(
-        '$baseUrl/orders/$orderId/pay',
+        '$baseUrl/api/v1/orders/$orderId/pay',
         data: {'amount': amount, 'method': method},
       );
     } catch (e) {
@@ -328,7 +329,7 @@ class SyncService {
   }) async {
     try {
       await dio.post(
-        '$baseUrl/orders/$orderNumber/split-table',
+        '$baseUrl/api/v1/orders/$orderNumber/split-table',
         data: {
           'targetTableNumber': targetTable,
           'items': items,
@@ -344,7 +345,7 @@ class SyncService {
   Future<void> mergeTables(String fromTable, String toTable) async {
     try {
       await dio.post(
-        '$baseUrl/orders/merge-tables',
+        '$baseUrl/api/v1/orders/merge-tables',
         data: {'fromTableNumber': fromTable, 'toTableNumber': toTable},
       );
     } catch (e) {
@@ -725,7 +726,7 @@ class SyncService {
 
   // --- Upstream Sync Methods (Menu & Categories) ---
 
-  Future<void> createCategory(CategoriesCompanion category) async {
+  Future<int> createCategory(CategoriesCompanion category) async {
     try {
       final json = {
         'name': category.name.value,
@@ -736,7 +737,8 @@ class SyncService {
         'status': category.status.present ? category.status.value : 'active',
       };
       debugPrint('SyncService: Creating category with JSON: $json');
-      await dio.post('$baseUrl/categories', data: json);
+      final response = await dio.post('$baseUrl/api/v1/categories', data: json);
+      return response.data['id'] as int;
     } catch (e) {
       debugPrint('Failed to create category upstream: $e');
       rethrow;
@@ -752,14 +754,14 @@ class SyncService {
         'station': category.station,
         'status': category.status,
       };
-      await dio.put('$baseUrl/categories/${category.id}', data: json);
+      await dio.put('$baseUrl/api/v1/categories/${category.id}', data: json);
     } catch (e) {
       debugPrint('Failed to update category upstream: $e');
       rethrow;
     }
   }
 
-  Future<void> createMenuItem(MenuItemsCompanion item) async {
+  Future<int> createMenuItem(MenuItemsCompanion item) async {
     try {
       final json = {
         'code': item.code.present ? item.code.value : null,
@@ -773,7 +775,8 @@ class SyncService {
             ? item.allowPriceEdit.value
             : false,
       };
-      await dio.post('$baseUrl/menu-items', data: json);
+      final response = await dio.post('$baseUrl/api/v1/menu-items', data: json);
+      return response.data['id'] as int;
     } catch (e) {
       debugPrint('Failed to create menu item upstream: $e');
       rethrow;
@@ -792,7 +795,7 @@ class SyncService {
         'status': item.status,
         'allowPriceEdit': item.allowPriceEdit,
       };
-      await dio.put('$baseUrl/menu-items/${item.id}', data: json);
+      await dio.put('$baseUrl/api/v1/menu-items/${item.id}', data: json);
     } catch (e) {
       debugPrint('Failed to update menu item upstream: $e');
       rethrow;
@@ -801,7 +804,7 @@ class SyncService {
 
   Future<void> deleteCategoryUpstream(int id) async {
     try {
-      await dio.delete('$baseUrl/categories/$id');
+      await dio.delete('$baseUrl/api/v1/categories/$id');
     } catch (e) {
       debugPrint('Failed to delete category upstream: $e');
       rethrow;
@@ -810,7 +813,7 @@ class SyncService {
 
   Future<void> deleteMenuItemUpstream(int id) async {
     try {
-      await dio.delete('$baseUrl/menu-items/$id');
+      await dio.delete('$baseUrl/api/v1/menu-items/$id');
     } catch (e) {
       debugPrint('Failed to delete menu item upstream: $e');
       rethrow;

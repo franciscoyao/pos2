@@ -6,13 +6,16 @@ import { Payment } from './payment.entity';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { EventsModule } from '../events/events.module';
+import { SyncModule } from '../sync/sync.module';
 
 @Module({
-    imports: [
-        TypeOrmModule.forFeature([Order, OrderItem, Payment]),
-        EventsModule
-    ],
-    controllers: [OrdersController],
-    providers: [OrdersService],
+  imports: [
+    TypeOrmModule.forFeature([Order, OrderItem, Payment]),
+    EventsModule,
+    SyncModule,
+  ],
+  controllers: [OrdersController],
+  providers: [OrdersService],
+  exports: [OrdersService],
 })
 export class OrdersModule { }

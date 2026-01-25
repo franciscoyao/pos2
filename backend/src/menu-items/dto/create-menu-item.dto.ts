@@ -1,33 +1,39 @@
-import { IsString, IsNumber, IsOptional, IsBoolean, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsBoolean,
+  IsIn,
+} from 'class-validator';
 
 export class CreateMenuItemDto {
-    @IsString()
-    @IsOptional()
-    code?: string;
+  @IsString()
+  @IsOptional()
+  code?: string;
 
-    @IsString()
-    name: string;
+  @IsString()
+  name: string;
 
-    @IsNumber()
-    price: number;
+  @IsNumber()
+  price: number;
 
-    @IsNumber()
-    categoryId: number;
+  @IsNumber()
+  categoryId: number;
 
-    @IsString()
-    @IsOptional()
-    station?: string;
+  @IsString()
+  @IsOptional()
+  station?: string;
 
-    @IsString()
-    @IsOptional()
-    @IsIn(['dine-in', 'takeaway'])
-    type?: string;
+  @IsString()
+  @IsOptional()
+  @IsIn(['dine-in', 'takeaway'])
+  type?: string;
 
-    @IsString()
-    @IsOptional()
-    status?: string;
+  @IsString()
+  @IsOptional()
+  status?: string;
 
-    @IsBoolean()
-    @IsOptional()
-    allowPriceEdit?: boolean;
+  @IsBoolean()
+  @IsOptional()
+  allowPriceEdit?: boolean;
 }

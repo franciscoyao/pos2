@@ -1,46 +1,87 @@
 version: '3.8'
+
 services:
-  db:
-    image: postgres:15
-    container_name: pos_db
+  # PostgreSQL Database - Optimized for performance
+  postgres:
+    image: postgres:18-alpine
+    container_name: pos-postgres
+    restart: unless-stopped
     environment:
+      POSTGRES_DB: pos_system
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: pos_db
-    ports:
-      - "5434:5432" # Maps host 5434 to container 5432 to avoid local postgres conflict
+      POSTGRES_PASSWORD: 1111
+      # Performance tuning for dev/small prod
+      # POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    command: >
+      postgres  -c shared_buffers=256MB  -c max_connections=200  -c work_mem=16MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    networks:
+      - pos-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U pos_user -d pos_system" ]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: always
 
+  # Redis - Caching and Pub/Sub
+  redis:
+    image: redis:7.4-alpine
+    container_name: pos-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    ports:
+      - "6379:6379"
+    networks:
+      - pos-network
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Application
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-      target: development
-    container_name: pos_backend
-    command: npm run start:dev
+    container_name: pos-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      PORT: 3000
     ports:
       - "3000:3000"
-    environment:
-      - DB_HOST=db
-      - DB_PORT=5432
-      - DB_USERNAME=postgres
-      - DB_PASSWORD=password123
-      - DB_NAME=pos_db
-      - PORT=3000
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - pos-network
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
-    restart: unless-stopped
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      # Bind mount source for easier dev debugging if needed, though we build immutable images
+      # - ./src:/app/src 
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:
+  redis_data:
+
+
+networks:
+  pos-network:
+    driver: bridge

@@ -5,6 +5,7 @@ import { Order } from './order.entity';
 import { Payment } from './payment.entity';
 import { OrderItem } from './order-item.entity';
 import { EventsGateway } from '../events/events.gateway';
+import { SyncService } from '../sync/sync.service';
 import { In } from 'typeorm';
 
 @Injectable()
@@ -17,11 +18,13 @@ export class OrdersService {
     @InjectRepository(OrderItem)
     private orderItemsRepository: Repository<OrderItem>,
     private eventsGateway: EventsGateway,
-  ) { }
+    private syncService: SyncService,
+  ) {}
 
   // Get all orders
   findAll(): Promise<Order[]> {
     return this.ordersRepository.find({
+      where: { isDeleted: false },
       relations: ['items', 'items.menuItem'],
       order: { createdAt: 'DESC' },
     });
@@ -99,32 +102,69 @@ export class OrdersService {
   }
 
   // Create new order
-  async create(orderData: Partial<Order>): Promise<Order> {
-    const newOrder = this.ordersRepository.create(orderData);
+  async create(orderData: Partial<Order>, deviceId?: string): Promise<Order> {
+    const newOrder = this.ordersRepository.create({
+      ...orderData,
+      lastModifiedBy: deviceId,
+    });
     const savedOrder = await this.ordersRepository.save(newOrder);
+
+    // Record sync change
+    await this.syncService.recordChange(
+      'order',
+      savedOrder.id,
+      'create',
+      savedOrder,
+      undefined,
+      deviceId,
+    );
 
     // Fetch with relations
     const orderWithRelations = await this.findOne(savedOrder.id);
 
     // Emit WebSocket event
-    this.eventsGateway.emitNewOrder(orderWithRelations);
+    this.eventsGateway.emitNewOrder(orderWithRelations, deviceId);
 
     return orderWithRelations;
   }
 
   // Update order
-  async update(id: number, orderData: Partial<Order>): Promise<Order> {
-    await this.ordersRepository.update(id, orderData);
+  async update(
+    id: number,
+    orderData: Partial<Order>,
+    deviceId?: string,
+  ): Promise<Order> {
+    const existingOrder = await this.findOne(id);
+
+    await this.ordersRepository.update(id, {
+      ...orderData,
+      lastModifiedBy: deviceId,
+    });
+
     const updatedOrder = await this.findOne(id);
 
+    // Record sync change
+    await this.syncService.recordChange(
+      'order',
+      id,
+      'update',
+      updatedOrder,
+      existingOrder,
+      deviceId,
+    );
+
     // Emit WebSocket event
-    this.eventsGateway.emitOrderUpdate(updatedOrder);
+    this.eventsGateway.emitOrderUpdate(updatedOrder, deviceId);
 
     return updatedOrder;
   }
 
   // Update order status
-  async updateStatus(id: number, status: string): Promise<Order> {
+  async updateStatus(
+    id: number,
+    status: string,
+    deviceId?: string,
+  ): Promise<Order> {
     const order = await this.findOne(id);
 
     if (status === 'completed') {
@@ -132,20 +172,34 @@ export class OrdersService {
     }
 
     order.status = status;
+    order.lastModifiedBy = deviceId || 'system';
     const updatedOrder = await this.ordersRepository.save(order);
 
+    // Record sync change
+    await this.syncService.recordChange(
+      'order',
+      id,
+      'update',
+      updatedOrder,
+      order,
+      deviceId,
+    );
+
     // Emit WebSocket event
-    this.eventsGateway.emitOrderUpdate(updatedOrder);
+    this.eventsGateway.emitOrderUpdate(updatedOrder, deviceId);
 
     return updatedOrder;
   }
 
   // Complete order with payment
-  async completeOrder(id: number, paymentData: {
-    paymentMethod: string;
-    tipAmount?: number;
-    taxNumber?: string;
-  }): Promise<Order> {
+  async completeOrder(
+    id: number,
+    paymentData: {
+      paymentMethod: string;
+      tipAmount?: number;
+      taxNumber?: string;
+    },
+  ): Promise<Order> {
     const order = await this.findOne(id);
 
     order.status = 'completed';
@@ -163,16 +217,33 @@ export class OrdersService {
   }
 
   // Delete order
-  async remove(id: number): Promise<void> {
+  async remove(id: number, deviceId?: string): Promise<void> {
     const order = await this.findOne(id);
-    await this.ordersRepository.remove(order);
+
+    // Soft delete
+    order.isDeleted = true;
+    order.lastModifiedBy = deviceId || 'system';
+    await this.ordersRepository.save(order);
+
+    // Record sync change
+    await this.syncService.recordChange(
+      'order',
+      id,
+      'delete',
+      { id, isDeleted: true },
+      order,
+      deviceId,
+    );
+
+    // Emit WebSocket event
+    this.eventsGateway.emitOrderDelete(id, deviceId);
   }
 
   // Get sales statistics
   async getSalesStats(startDate: Date, endDate: Date) {
     const orders = await this.getOrdersByDateRange(startDate, endDate);
 
-    const completed = orders.filter(o => o.status === 'completed');
+    const completed = orders.filter((o) => o.status === 'completed');
 
     const totalSales = completed.reduce((sum, o) => sum + o.totalAmount, 0);
     const totalTax = completed.reduce((sum, o) => sum + o.taxAmount, 0);
@@ -185,18 +256,25 @@ export class OrdersService {
       totalTax,
       totalService,
       totalTips,
-      averageOrderValue: completed.length > 0 ? totalSales / completed.length : 0,
+      averageOrderValue:
+        completed.length > 0 ? totalSales / completed.length : 0,
     };
   }
 
   // Pay specific items (Split Bill by Item)
-  async payItems(orderId: number, items: { id: number; quantity: number }[], paymentMethod: string): Promise<Order> {
+  async payItems(
+    orderId: number,
+    items: { id: number; quantity: number }[],
+    paymentMethod: string,
+  ): Promise<Order> {
     const order = await this.findOne(orderId);
 
     // Filter items that belong to order and are not paid
     // Ensure we process each item request
-    const itemRequests = items.filter(req => {
-      const exists = order.items.find(i => i.id === req.id && i.status !== 'paid');
+    const itemRequests = items.filter((req) => {
+      const exists = order.items.find(
+        (i) => i.id === req.id && i.status !== 'paid',
+      );
       return !!exists;
     });
 
@@ -211,12 +289,14 @@ export class OrdersService {
     // We need amount first.
     // Loop to calculate amount and validate quantities
     for (const req of itemRequests) {
-      const originalItem = order.items.find(i => i.id === req.id)!;
+      const originalItem = order.items.find((i) => i.id === req.id)!;
 
       if (req.quantity > originalItem.quantity) {
-        throw new Error(`Cannot pay more than quantity for item ${originalItem.menuItem.name}`);
+        throw new Error(
+          `Cannot pay more than quantity for item ${originalItem.menuItem.name}`,
+        );
       }
-      totalPayAmount += (originalItem.priceAtTime * req.quantity);
+      totalPayAmount += originalItem.priceAtTime * req.quantity;
     }
 
     // Create Payment
@@ -224,13 +304,13 @@ export class OrdersService {
       order,
       amount: totalPayAmount,
       method: paymentMethod,
-      status: 'success'
+      status: 'success',
     });
     const savedPayment = await this.paymentsRepository.save(payment);
 
     // Update/Split Items
     for (const req of itemRequests) {
-      const originalItem = order.items.find(i => i.id === req.id)!;
+      const originalItem = order.items.find((i) => i.id === req.id)!;
 
       if (req.quantity === originalItem.quantity) {
         // Pay full item
@@ -251,7 +331,7 @@ export class OrdersService {
           quantity: req.quantity,
           status: 'paid',
           payment: savedPayment,
-          order: order // Same order
+          order: order, // Same order
         });
         await this.orderItemsRepository.save(newItem);
         paidItems.push(newItem);
@@ -270,8 +350,10 @@ export class OrdersService {
     // We should check if ALL items belonging to this order have status 'paid'.
 
     // Refresh order items to be sure
-    const refreshedItems = await this.orderItemsRepository.find({ where: { order: { id: orderId } } });
-    const allItemsPaid = refreshedItems.every(i => i.status === 'paid');
+    const refreshedItems = await this.orderItemsRepository.find({
+      where: { order: { id: orderId } },
+    });
+    const allItemsPaid = refreshedItems.every((i) => i.status === 'paid');
 
     if (allItemsPaid) {
       order.status = 'paid';
@@ -286,14 +368,18 @@ export class OrdersService {
   }
 
   // Add generic payment (Split Bill Equal/Amount)
-  async addPayment(orderId: number, amount: number, method: string): Promise<Order> {
+  async addPayment(
+    orderId: number,
+    amount: number,
+    method: string,
+  ): Promise<Order> {
     const order = await this.findOne(orderId);
 
     const payment = this.paymentsRepository.create({
       order,
       amount,
       method,
-      status: 'success'
+      status: 'success',
     });
     await this.paymentsRepository.save(payment);
 
@@ -320,21 +406,31 @@ export class OrdersService {
 
   // Split Table (Move items to another table)
   // Split Table (Move items to another table)
-  async splitTable(currentOrderNumber: string, targetTableNumber: string, items: { id: number; quantity: number }[], newOrderNumber?: string): Promise<Order> {
+  async splitTable(
+    currentOrderNumber: string,
+    targetTableNumber: string,
+    items: { id: number; quantity: number }[],
+    newOrderNumber?: string,
+  ): Promise<Order> {
     // 1. Get current order
     const currentOrder = await this.ordersRepository.findOne({
       where: { orderNumber: currentOrderNumber },
-      relations: ['items', 'items.menuItem']
+      relations: ['items', 'items.menuItem'],
     });
 
     if (!currentOrder) {
-      throw new NotFoundException(`Order with number ${currentOrderNumber} not found`);
+      throw new NotFoundException(
+        `Order with number ${currentOrderNumber} not found`,
+      );
     }
 
     // 2. Find or Create target order
     let targetOrder = await this.ordersRepository.findOne({
-      where: { tableNumber: targetTableNumber, status: In(['pending', 'active', 'cooking', 'served']) },
-      relations: ['items', 'items.menuItem']
+      where: {
+        tableNumber: targetTableNumber,
+        status: In(['pending', 'active', 'cooking', 'served']),
+      },
+      relations: ['items', 'items.menuItem'],
     });
 
     if (!targetOrder) {
@@ -357,23 +453,25 @@ export class OrdersService {
     }
 
     // 3. Move items
-    const itemRequests = items.filter(req => {
-      const item = currentOrder.items.find(i => i.id === req.id);
+    const itemRequests = items.filter((req) => {
+      const item = currentOrder.items.find((i) => i.id === req.id);
       return item != null;
     });
 
     let movedAmount = 0;
     for (const req of itemRequests) {
-      const originalItem = currentOrder.items.find(i => i.id === req.id)!;
+      const originalItem = currentOrder.items.find((i) => i.id === req.id)!;
 
       if (req.quantity > originalItem.quantity) {
-        throw new Error(`Cannot move more than quantity for item ${originalItem.menuItem.name}`);
+        throw new Error(
+          `Cannot move more than quantity for item ${originalItem.menuItem.name}`,
+        );
       }
 
       if (req.quantity === originalItem.quantity) {
         // Move entire item
         originalItem.order = targetOrder;
-        movedAmount += (originalItem.priceAtTime * originalItem.quantity);
+        movedAmount += originalItem.priceAtTime * originalItem.quantity;
         await this.orderItemsRepository.save(originalItem);
       } else {
         // Split item
@@ -386,22 +484,25 @@ export class OrdersService {
           ...originalItem,
           id: undefined,
           quantity: req.quantity,
-          order: targetOrder
+          order: targetOrder,
         });
-        movedAmount += (newItem.priceAtTime * newItem.quantity);
+        movedAmount += newItem.priceAtTime * newItem.quantity;
         await this.orderItemsRepository.save(newItem);
       }
     }
 
     // 4. Update totals
-    currentOrder.totalAmount = Math.max(0, currentOrder.totalAmount - movedAmount);
+    currentOrder.totalAmount = Math.max(
+      0,
+      currentOrder.totalAmount - movedAmount,
+    );
     targetOrder.totalAmount = (targetOrder.totalAmount || 0) + movedAmount;
 
     await this.ordersRepository.save(targetOrder);
 
     // Check if current order is empty
     const remainingItemsCount = await this.orderItemsRepository.count({
-      where: { order: { id: currentOrder.id } }
+      where: { order: { id: currentOrder.id } },
     });
 
     if (remainingItemsCount === 0) {
@@ -426,13 +527,16 @@ export class OrdersService {
   }
 
   // Merge Tables (Move all orders from one table to another)
-  async mergeTables(fromTableNumber: string, toTableNumber: string): Promise<void> {
+  async mergeTables(
+    fromTableNumber: string,
+    toTableNumber: string,
+  ): Promise<void> {
     const fromOrders = await this.ordersRepository.find({
       where: {
         tableNumber: fromTableNumber,
-        status: In(['pending', 'active', 'cooking', 'served', 'ready'])
+        status: In(['pending', 'active', 'cooking', 'served', 'ready']),
       },
-      relations: ['items']
+      relations: ['items'],
     });
 
     if (fromOrders.length === 0) {
@@ -443,9 +547,9 @@ export class OrdersService {
     const targetOrder = await this.ordersRepository.findOne({
       where: {
         tableNumber: toTableNumber,
-        status: In(['pending', 'active', 'cooking', 'served', 'ready'])
+        status: In(['pending', 'active', 'cooking', 'served', 'ready']),
       },
-      relations: ['items']
+      relations: ['items'],
     });
 
     if (targetOrder) {
@@ -456,7 +560,8 @@ export class OrdersService {
           await this.orderItemsRepository.save(item);
         }
         // Update target totals
-        targetOrder.totalAmount = (targetOrder.totalAmount || 0) + order.totalAmount;
+        targetOrder.totalAmount =
+          (targetOrder.totalAmount || 0) + order.totalAmount;
         // Delete old order
         await this.ordersRepository.remove(order);
       }

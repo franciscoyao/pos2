@@ -1,4 +1,11 @@
-import { IsString, IsNumber, IsOptional, IsArray, ValidateNested, IsDateString } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrderItemDto {
@@ -54,7 +61,7 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   paymentMethod?: string;
-  
+
   @IsOptional()
   @IsString()
   taxNumber?: string;

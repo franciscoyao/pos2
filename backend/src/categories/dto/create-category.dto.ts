@@ -1,22 +1,22 @@
 import { IsString, IsInt, IsOptional, IsIn } from 'class-validator';
 
 export class CreateCategoryDto {
-    @IsString()
-    name: string;
+  @IsString()
+  name: string;
 
-    @IsString()
-    @IsIn(['dine-in', 'takeaway'])
-    menuType: string;
+  @IsString()
+  @IsIn(['dine-in', 'takeaway'])
+  menuType: string;
 
-    @IsInt()
-    @IsOptional()
-    sortOrder?: number;
+  @IsInt()
+  @IsOptional()
+  sortOrder?: number;
 
-    @IsString()
-    @IsOptional()
-    station?: string;
+  @IsString()
+  @IsOptional()
+  station?: string;
 
-    @IsString()
-    @IsOptional()
-    status?: string;
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

@@ -12,7 +12,7 @@ class WebSocketService {
     // Replace with your backend URL.
     // For Android Emulator use 10.0.2.2 instead of localhost
     // For physical device use your machine's LAN IP
-    socket = socket_io.io('http://localhost:3000', <String, dynamic>{
+    socket = socket_io.io('http://localhost:3000/sync', <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
     });

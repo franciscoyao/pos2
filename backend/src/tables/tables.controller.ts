@@ -4,20 +4,23 @@ import { RestaurantTable } from './table.entity';
 
 @Controller('tables')
 export class TablesController {
-    constructor(private readonly tablesService: TablesService) { }
+  constructor(private readonly tablesService: TablesService) {}
 
-    @Get()
-    findAll(): Promise<RestaurantTable[]> {
-        return this.tablesService.findAll();
-    }
+  @Get()
+  findAll(): Promise<RestaurantTable[]> {
+    return this.tablesService.findAll();
+  }
 
-    @Post()
-    create(@Body() table: RestaurantTable): Promise<RestaurantTable> {
-        return this.tablesService.create(table);
-    }
+  @Post()
+  create(@Body() table: RestaurantTable): Promise<RestaurantTable> {
+    return this.tablesService.create(table);
+  }
 
-    @Put(':id')
-    update(@Param('id') id: string, @Body() table: Partial<RestaurantTable>): Promise<void> {
-        return this.tablesService.update(+id, table);
-    }
+  @Put(':id')
+  async update(
+    @Param('id') id: string,
+    @Body() table: Partial<RestaurantTable>,
+  ): Promise<RestaurantTable> {
+    return this.tablesService.update(+id, table);
+  }
 }

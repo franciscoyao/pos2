@@ -1,34 +1,57 @@
-# Base image
-FROM node:18-alpine As development
+# Multi-stage build for production optimization
+FROM node:22-alpine AS builder
 
-# Create app directory
-WORKDIR /usr/src/app
+# Set working directory
+WORKDIR /app
 
-# Copy application dependency manifests to the container image.
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
+# Copy package files
 COPY package*.json ./
 
-# Install app dependencies
-RUN npm ci
+# Install dependencies
+RUN npm ci --legacy-peer-deps && npm cache clean --force
 
-# Copy the rest of the application source code
+# Copy source code
 COPY . .
 
 # Build the application
 RUN npm run build
 
-# Production image
-FROM node:18-alpine As production
+# Production stage
+FROM node:22-alpine AS production
 
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
+# Install dumb-init and wget for proper signal handling and health checks
+RUN apk add --no-cache dumb-init wget
 
-WORKDIR /usr/src/app
+# Create app user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nestjs -u 1001
 
+# Set working directory
+WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
 
-RUN npm ci --only=production
+# Install only production dependencies
+RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 
-COPY --from=development /usr/src/app/dist ./dist
+# Copy built application from builder stage
+COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nestjs:nodejs /app/src/health-check.js ./dist/
 
-CMD ["node", "dist/main"]
+# Create necessary directories
+RUN mkdir -p logs uploads && chown -R nestjs:nodejs logs uploads
+
+# Switch to non-root user
+USER nestjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node dist/health-check.js || exit 1
+
+# Start the application
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/main.js"]
