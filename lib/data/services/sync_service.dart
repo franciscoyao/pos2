@@ -806,6 +806,11 @@ class SyncService {
     try {
       await dio.delete('$baseUrl/api/v1/categories/$id');
     } catch (e) {
+      if (e is DioException && e.response?.statusCode == 404) {
+         // Already deleted upstream, ignore
+         debugPrint('Category $id already deleted upstream');
+         return;
+      }
       debugPrint('Failed to delete category upstream: $e');
       rethrow;
     }
@@ -815,6 +820,11 @@ class SyncService {
     try {
       await dio.delete('$baseUrl/api/v1/menu-items/$id');
     } catch (e) {
+      if (e is DioException && e.response?.statusCode == 404) {
+         // Already deleted upstream, ignore
+         debugPrint('Item $id already deleted upstream');
+         return;
+      }
       debugPrint('Failed to delete menu item upstream: $e');
       rethrow;
     }

@@ -2,10 +2,6 @@ node_modules
 dist
 npm-debug.log
 Dockerfile
-.dockerignore
+docker-compose.yml
 .git
 .gitignore
-README.md
-LICENSE
-.vscode
-test

@@ -1,84 +1,45 @@
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
-import { MenuItem } from './menu-item.entity';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { CreateMenuItemDto } from './dto/create-menu-item.dto';
+import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
+import { MenuItem } from './entities/menu-item.entity';
+import { OrdersGateway } from '../orders/orders.gateway';
 
 @Injectable()
 export class MenuItemsService {
   constructor(
     @InjectRepository(MenuItem)
     private menuItemsRepository: Repository<MenuItem>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
-    private eventEmitter: EventEmitter2,
+    private ordersGateway: OrdersGateway,
   ) { }
 
-  async findAll(): Promise<MenuItem[]> {
-    const cached = await this.cacheManager.get<MenuItem[]>('menu_items:all');
-    if (cached) {
-      return cached;
-    }
-
-    const items = await this.menuItemsRepository.find({
-      relations: ['category'],
-      order: {
-        category: {
-          sortOrder: 'ASC',
-        },
-        name: 'ASC',
-      },
-    });
-
-    await this.cacheManager.set('menu_items:all', items, 60000); // 1 minute cache
-    return items;
+  async create(createMenuItemDto: CreateMenuItemDto) {
+    const menuItem = this.menuItemsRepository.create(createMenuItemDto);
+    const savedMenuItem = await this.menuItemsRepository.save(menuItem);
+    this.ordersGateway.notifyMenuItemUpdate(savedMenuItem);
+    return savedMenuItem;
   }
 
-  async findOne(id: number): Promise<MenuItem> {
-    const item = await this.menuItemsRepository.findOne({
-      where: { id },
-      relations: ['category'],
-    });
-
-    if (!item) {
-      throw new NotFoundException(`Menu item with ID ${id} not found`);
-    }
-
-    return item;
+  findAll() {
+    return this.menuItemsRepository.find();
   }
 
-  async findByCategory(categoryId: number): Promise<MenuItem[]> {
-    const allItems = await this.findAll();
-    return allItems.filter(item => item.category?.id === +categoryId);
+  findOne(id: number) {
+    return this.menuItemsRepository.findOneBy({ id });
   }
 
-  async create(createDto: Partial<MenuItem>, deviceId?: string): Promise<MenuItem> {
-    const item = this.menuItemsRepository.create(createDto);
-    const saved = await this.menuItemsRepository.save(item);
-
-    await this.cacheManager.del('menu_items:all');
-    this.eventEmitter.emit('menu-item.updated', { ...saved, deviceId });
-
-    return saved;
+  async update(id: number, updateMenuItemDto: UpdateMenuItemDto) {
+    await this.menuItemsRepository.update(id, updateMenuItemDto);
+    const updatedMenuItem = await this.findOne(id);
+    this.ordersGateway.notifyMenuItemUpdate(updatedMenuItem);
+    return updatedMenuItem;
   }
 
-  async update(id: number, updateDto: Partial<MenuItem>, deviceId?: string): Promise<MenuItem> {
-    const item = await this.findOne(id);
-    Object.assign(item, updateDto);
-    const saved = await this.menuItemsRepository.save(item);
-
-    await this.cacheManager.del('menu_items:all');
-    this.eventEmitter.emit('menu-item.updated', { ...saved, deviceId });
-
-    return saved;
-  }
-
-  async remove(id: number, deviceId?: string): Promise<void> {
-    const item = await this.findOne(id);
-    await this.menuItemsRepository.remove(item);
-
-    await this.cacheManager.del('menu_items:all');
-    this.eventEmitter.emit('menu-item.deleted', { id, deviceId });
+  async remove(id: number) {
+    const menuItem = await this.findOne(id);
+    await this.menuItemsRepository.delete(id);
+    // Notify deletion if supported by frontend
+    return menuItem;
   }
 }

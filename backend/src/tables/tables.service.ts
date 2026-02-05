@@ -1,142 +1,46 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { RestaurantTable } from './table.entity';
-import { EventsGateway } from '../events/events.gateway';
-import { SyncService } from '../sync/sync.service';
+import { CreateTableDto } from './dto/create-table.dto';
+import { UpdateTableDto } from './dto/update-table.dto';
+import { RestaurantTable } from './entities/table.entity';
+import { OrdersGateway } from '../orders/orders.gateway';
 
 @Injectable()
 export class TablesService {
   constructor(
     @InjectRepository(RestaurantTable)
     private tablesRepository: Repository<RestaurantTable>,
-    private eventsGateway: EventsGateway,
-    private syncService: SyncService,
+    private ordersGateway: OrdersGateway,
   ) { }
 
-  findAll(): Promise<RestaurantTable[]> {
-    return this.tablesRepository.find({
-      where: { isDeleted: false },
-      order: { name: 'ASC' },
-    });
-  }
-
-  async findOne(id: number): Promise<RestaurantTable> {
-    const table = await this.tablesRepository.findOne({
-      where: { id, isDeleted: false },
-    });
-
-    if (!table) {
-      throw new NotFoundException(`Table with ID ${id} not found`);
-    }
-
-    return table;
-  }
-
-  async create(
-    tableData: Partial<RestaurantTable>,
-    deviceId?: string,
-  ): Promise<RestaurantTable> {
-    const table = this.tablesRepository.create({
-      ...tableData,
-      lastModifiedBy: deviceId,
-    });
-
+  async create(createTableDto: CreateTableDto) {
+    const table = this.tablesRepository.create(createTableDto);
     const savedTable = await this.tablesRepository.save(table);
-
-    // Record sync change
-    await this.syncService.recordChange(
-      'table',
-      savedTable.id,
-      'create',
-      savedTable,
-      undefined,
-      deviceId,
-    );
-
-    // Emit real-time update
-    this.eventsGateway.emitTableUpdate(savedTable, deviceId);
-
+    this.ordersGateway.notifyTableUpdate(savedTable);
     return savedTable;
   }
 
-  async update(
-    id: number,
-    tableData: Partial<RestaurantTable>,
-    deviceId?: string,
-  ): Promise<RestaurantTable> {
-    const existingTable = await this.findOne(id);
+  findAll() {
+    return this.tablesRepository.find();
+  }
 
-    await this.tablesRepository.update(id, {
-      ...tableData,
-      lastModifiedBy: deviceId,
-    });
+  findOne(id: number) {
+    return this.tablesRepository.findOneBy({ id });
+  }
 
+  async update(id: number, updateTableDto: UpdateTableDto) {
+    await this.tablesRepository.update(id, updateTableDto);
     const updatedTable = await this.findOne(id);
-
-    // Record sync change
-    await this.syncService.recordChange(
-      'table',
-      id,
-      'update',
-      updatedTable,
-      existingTable,
-      deviceId,
-    );
-
-    // Emit real-time update
-    this.eventsGateway.emitTableUpdate(updatedTable, deviceId);
-
+    this.ordersGateway.notifyTableUpdate(updatedTable);
     return updatedTable;
   }
 
-  async remove(id: number, deviceId?: string): Promise<void> {
+  async remove(id: number) {
     const table = await this.findOne(id);
-
-    // Soft delete
-    table.isDeleted = true;
-    table.lastModifiedBy = deviceId || 'system';
-    await this.tablesRepository.save(table);
-
-    // Record sync change
-    await this.syncService.recordChange(
-      'table',
-      id,
-      'delete',
-      { id, isDeleted: true },
-      table,
-      deviceId,
-    );
-
-    // Emit real-time update
-    this.eventsGateway.emitTableUpdate({ ...table, isDeleted: true }, deviceId);
-  }
-
-  async updateStatus(
-    id: number,
-    status: string,
-    deviceId?: string,
-  ): Promise<RestaurantTable> {
-    return this.update(id, { status }, deviceId);
-  }
-
-  async getAvailableTables(): Promise<RestaurantTable[]> {
-    return this.tablesRepository.find({
-      where: {
-        status: 'available',
-        isDeleted: false,
-      },
-      order: { name: 'ASC' },
-    });
-  }
-
-  async getOccupiedTables(): Promise<RestaurantTable[]> {
-    return this.tablesRepository.find({
-      where: {
-        status: 'occupied',
-        isDeleted: false,
-      },
-      order: { name: 'ASC' },
-    });
+    await this.tablesRepository.delete(id);
+    // notify deletion if needed
+    return table;
   }
 }
+

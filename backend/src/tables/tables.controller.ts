@@ -1,26 +1,34 @@
-import { Controller, Get, Post, Body, Put, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { TablesService } from './tables.service';
-import { RestaurantTable } from './table.entity';
+import { CreateTableDto } from './dto/create-table.dto';
+import { UpdateTableDto } from './dto/update-table.dto';
 
 @Controller('tables')
 export class TablesController {
   constructor(private readonly tablesService: TablesService) {}
 
+  @Post()
+  create(@Body() createTableDto: CreateTableDto) {
+    return this.tablesService.create(createTableDto);
+  }
+
   @Get()
-  findAll(): Promise<RestaurantTable[]> {
+  findAll() {
     return this.tablesService.findAll();
   }
 
-  @Post()
-  create(@Body() table: RestaurantTable): Promise<RestaurantTable> {
-    return this.tablesService.create(table);
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.tablesService.findOne(+id);
   }
 
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() table: Partial<RestaurantTable>,
-  ): Promise<RestaurantTable> {
-    return this.tablesService.update(+id, table);
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateTableDto: UpdateTableDto) {
+    return this.tablesService.update(+id, updateTableDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.tablesService.remove(+id);
   }
 }

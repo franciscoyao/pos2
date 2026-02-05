@@ -1,94 +1,34 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Delete,
-  Body,
-  Param,
-  Query,
-  Headers,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
 import { SettingsService } from './settings.service';
+import { CreateSettingDto } from './dto/create-setting.dto';
+import { UpdateSettingDto } from './dto/update-setting.dto';
 
 @Controller('settings')
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
-  private getDeviceId(headers: any): string | undefined {
-    return headers['x-device-id'] || headers['device-id'];
+  @Post()
+  create(@Body() createSettingDto: CreateSettingDto) {
+    return this.settingsService.create(createSettingDto);
   }
 
   @Get()
-  async getAllSettings() {
-    return await this.settingsService.getAllSettings();
+  findAll() {
+    return this.settingsService.findAll();
   }
 
-  @Get('category/:category')
-  async getByCategory(@Param('category') category: string) {
-    return await this.settingsService.getByCategory(category);
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.settingsService.findOne(+id);
   }
 
-  @Get(':key')
-  async getSetting(@Param('key') key: string) {
-    return await this.settingsService.get(key);
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateSettingDto: UpdateSettingDto) {
+    return this.settingsService.update(+id, updateSettingDto);
   }
 
-  @Put(':key')
-  async setSetting(
-    @Param('key') key: string,
-    @Body() body: { value: any },
-    @Headers() headers: any,
-  ) {
-    const deviceId = this.getDeviceId(headers);
-    return await this.settingsService.set(key, body.value, deviceId);
-  }
-
-  @Post('bulk')
-  async bulkUpdate(
-    @Body() updates: Record<string, any>,
-    @Headers() headers: any,
-  ) {
-    const deviceId = this.getDeviceId(headers);
-    await this.settingsService.bulkUpdate(updates, deviceId);
-    return { success: true };
-  }
-
-  @Post(':key/reset')
-  async resetToDefault(@Param('key') key: string) {
-    return await this.settingsService.resetToDefault(key);
-  }
-
-  @Delete(':key')
-  async deleteSetting(@Param('key') key: string) {
-    await this.settingsService.delete(key);
-    return { success: true };
-  }
-
-  @Post('cache/clear')
-  async clearCache() {
-    await this.settingsService.clearCache();
-    return { success: true };
-  }
-
-  // Convenience endpoints for common settings
-  @Get('business/tax-rate')
-  async getTaxRate() {
-    return { taxRate: await this.settingsService.getTaxRate() };
-  }
-
-  @Get('business/service-rate')
-  async getServiceRate() {
-    return { serviceRate: await this.settingsService.getServiceRate() };
-  }
-
-  @Get('business/currency')
-  async getCurrency() {
-    return { currencySymbol: await this.settingsService.getCurrencySymbol() };
-  }
-
-  @Get('kiosk/enabled')
-  async isKioskEnabled() {
-    return { enabled: await this.settingsService.isKioskEnabled() };
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.settingsService.remove(+id);
   }
 }

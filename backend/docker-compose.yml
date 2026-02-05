@@ -1,87 +1,38 @@
 version: '3.8'
-
 services:
-  # PostgreSQL Database - Optimized for performance
   postgres:
-    image: postgres:18-alpine
-    container_name: pos-postgres
-    restart: unless-stopped
+    image: postgres:15-alpine
+    container_name: pos_postgres
     environment:
-      POSTGRES_DB: pos_system
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1111
-      # Performance tuning for dev/small prod
-      # POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
-    command: >
-      postgres  -c shared_buffers=256MB  -c max_connections=200  -c work_mem=16MB
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pos_db
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5434:5432"
-    networks:
-      - pos-network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U pos_user -d pos_system" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Redis - Caching and Pub/Sub
-  redis:
-    image: redis:7.4-alpine
-    container_name: pos-redis
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    ports:
-      - "6379:6379"
-    networks:
-      - pos-network
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Backend Application
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: pos-backend
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      NODE_ENV: development
-      PORT: 3000
+    container_name: pos_backend
     ports:
       - "3000:3000"
+    environment:
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: password
+      DATABASE_NAME: pos_db
+      PORT: 3000
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    networks:
-      - pos-network
+      - postgres
     volumes:
-      - ./logs:/app/logs
-      - ./uploads:/app/uploads
-      # Bind mount source for easier dev debugging if needed, though we build immutable images
-      # - ./src:/app/src 
-    healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health" ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 30s
+      - .:/app
+      - /app/node_modules
+    # Override command for development to use hot-reload
+    command: npm run start:dev
 
 volumes:
   postgres_data:
-  redis_data:
-
-
-networks:
-  pos-network:
-    driver: bridge

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:pos_system/data/database/database.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -67,9 +68,37 @@ class MenuRepository {
     try {
       final serverId = await syncService.createCategory(category);
       // Update local ID to match server ID immediately
-      await (db.update(db.categories)..where((t) => t.id.equals(id))).write(
-        CategoriesCompanion(id: Value(serverId)),
-      );
+      final existing = await (db.select(
+        db.categories,
+      )..where((t) => t.id.equals(serverId))).getSingleOrNull();
+
+      if (existing != null && existing.id != id) {
+        debugPrint(
+          'Sync: ID collision for category $serverId. Merging local entry.',
+        );
+        // Update existing (stale) server-ID row with new data
+        await (db.update(
+          db.categories,
+        )..where((t) => t.id.equals(serverId))).write(
+          CategoriesCompanion(
+            name: category.name,
+            menuType: category.menuType,
+            sortOrder: category.sortOrder,
+            station: category.station,
+            status: category.status,
+          ),
+        );
+        // Move any items from temp ID to server ID
+        await (db.update(db.menuItems)..where((t) => t.categoryId.equals(id)))
+            .write(MenuItemsCompanion(categoryId: Value(serverId)));
+        // Delete temp ID
+        await (db.delete(db.categories)..where((t) => t.id.equals(id))).go();
+      } else {
+        await (db.update(db.categories)..where((t) => t.id.equals(id))).write(
+          CategoriesCompanion(id: Value(serverId)),
+        );
+      }
+
       // If we had items using the old ID, we would need to migrate them here too
       // But addCategory usually happens before items are added to it.
       return serverId;
@@ -103,7 +132,12 @@ class MenuRepository {
     try {
       await syncService.deleteCategoryUpstream(id);
     } catch (e) {
-      debugPrint('Upstream category deletion failed: $e');
+      if (e is DioException && e.response?.statusCode == 404) {
+        // Already deleted upstream, ignore
+        debugPrint('Category $id already deleted upstream');
+      } else {
+        debugPrint('Upstream category deletion failed: $e');
+      }
     }
   }
 
@@ -111,10 +145,42 @@ class MenuRepository {
     final id = await db.into(db.menuItems).insert(item);
     try {
       final serverId = await syncService.createMenuItem(item);
-      // Update local ID to match server ID immediately
-      await (db.update(db.menuItems)..where((t) => t.id.equals(id))).write(
-        MenuItemsCompanion(id: Value(serverId)),
-      );
+
+      // Check collision
+      final existing = await (db.select(
+        db.menuItems,
+      )..where((t) => t.id.equals(serverId))).getSingleOrNull();
+
+      if (existing != null && existing.id != id) {
+        debugPrint(
+          'Sync: ID collision for item $serverId. Merging local entry.',
+        );
+        await (db.update(
+          db.menuItems,
+        )..where((t) => t.id.equals(serverId))).write(
+          MenuItemsCompanion(
+            code: item.code,
+            name: item.name,
+            price: item.price,
+            categoryId: item.categoryId,
+            station: item.station,
+            type: item.type,
+            status: item.status,
+            allowPriceEdit: item.allowPriceEdit,
+          ),
+        );
+        // Move any dependencies (OrderItems)
+        await (db.update(db.orderItems)..where((t) => t.menuItemId.equals(id)))
+            .write(OrderItemsCompanion(menuItemId: Value(serverId)));
+
+        // Delete temp
+        await (db.delete(db.menuItems)..where((t) => t.id.equals(id))).go();
+      } else {
+        // Update local ID to match server ID immediately
+        await (db.update(db.menuItems)..where((t) => t.id.equals(id))).write(
+          MenuItemsCompanion(id: Value(serverId)),
+        );
+      }
       return serverId;
     } catch (e) {
       debugPrint('Upstream item creation failed: $e');
@@ -140,7 +206,12 @@ class MenuRepository {
     try {
       await syncService.deleteMenuItemUpstream(id);
     } catch (e) {
-      debugPrint('Upstream item deletion failed: $e');
+      if (e is DioException && e.response?.statusCode == 404) {
+        // Already deleted upstream, ignore
+        debugPrint('Item $id already deleted upstream');
+      } else {
+        debugPrint('Upstream item deletion failed: $e');
+      }
     }
   }
 }

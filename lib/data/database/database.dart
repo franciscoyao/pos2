@@ -38,15 +38,18 @@ class AppDatabase extends _$AppDatabase {
         await migrator.addColumn(categories, categories.status);
       }
       if (from < 4) {
-        // Migration to 4: Clear fake data
-        await delete(orderItems).go();
-        await delete(orders).go();
-        await delete(menuItems).go();
-        await delete(categories).go();
+        // Migration to 4: Clear fake data - DISABLED for production safety
+        // In a real app, you should migrate data instead of deleting it.
+        // If schema changes are incompatible, use migrator.alterTable or create new tables and copy data.
+        
+        // await delete(orderItems).go();
+        // await delete(orders).go();
+        // await delete(menuItems).go();
+        // await delete(categories).go();
       }
       if (from < 5) {
-        // Migration to 5: Clear existing tables
-        await delete(restaurantTables).go();
+        // Migration to 5: Clear existing tables - DISABLED for production safety
+        // await delete(restaurantTables).go();
       }
     },
     beforeOpen: (details) async {
