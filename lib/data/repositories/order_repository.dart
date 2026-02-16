@@ -22,49 +22,29 @@ class OrderRepository {
     });
   }
 
-  // Transaction to create order and items together
   Future<void> submitOrder({
     required OrdersCompanion order,
     required List<OrderItemsCompanion> items,
   }) async {
-    await db.transaction(() async {
-      // Auto-create table if provided and doesn't exist
-      if (order.tableNumber.present && order.tableNumber.value != null) {
-        final tableName = order.tableNumber.value!;
-        final existingTable = await (db.select(
-          db.restaurantTables,
-        )..where((t) => t.name.equals(tableName))).getSingleOrNull();
+    // Local-First: Insert locally
+    final orderId = await db.into(db.orders).insert(order);
 
-        if (existingTable == null) {
-          await db
-              .into(db.restaurantTables)
-              .insert(
-                RestaurantTablesCompanion(
-                  name: Value(tableName),
-                  status: const Value(
-                    'occupied',
-                  ), // Mark as occupied since ordering
-                ),
-              );
-        } else {
-          // Update status to occupied? Maybe not strictly necessary strictly requested but good UX.
-          // Let's just create if not exists for now to satisfy the "create automaticly" request.
-        }
-      }
-
-      final orderId = await db.into(db.orders).insert(order);
-
-      final itemsWithOrderId = items
-          .map((item) => item.copyWith(orderId: Value(orderId)))
-          .toList();
-
-      await db.batch((batch) {
-        batch.insertAll(db.orderItems, itemsWithOrderId);
-      });
+    final itemsWithOrderId = items
+        .map((i) => i.copyWith(orderId: Value(orderId)))
+        .toList();
+    await db.batch((batch) {
+      batch.insertAll(db.orderItems, itemsWithOrderId);
     });
 
-    // Sync upstream (fire and forget)
-    syncService.createOrder(order, items);
+    // Sync
+    syncService.createOrder(orderId).ignore();
+  }
+
+  Future<void> updateOrderItemStatus(int itemId, String status) async {
+    await (db.update(db.orderItems)..where((t) => t.id.equals(itemId))).write(
+      OrderItemsCompanion(status: Value(status)),
+    );
+    syncService.updateOrderItemStatus(itemId, status).ignore();
   }
 
   Stream<List<Order>> watchActiveOrders() {
@@ -169,21 +149,14 @@ class OrderRepository {
   }
 
   Future<void> updateOrderStatus(int id, String status) async {
-    // Sync upstream
-    syncService.updateOrderStatus(id, status);
-
-    final companion = OrdersCompanion(status: Value(status));
-    await (db.update(db.orders)..where((t) => t.id.equals(id))).write(
-      status == 'paid' || status == 'completed'
-          ? companion.copyWith(completedAt: Value(DateTime.now()))
-          : companion,
-    );
+    // Online-First: Sync upstream
+    await syncService.updateOrderStatus(id, status);
   }
 
   Future<void> markOrdersAsPaid(List<int> orderIds) async {
-    final now = DateTime.now();
-    await (db.update(db.orders)..where((t) => t.id.isIn(orderIds))).write(
-      OrdersCompanion(status: const Value('paid'), completedAt: Value(now)),
+    // Online-First: Sync each order status change
+    await Future.wait(
+      orderIds.map((id) => syncService.updateOrderStatus(id, 'paid')),
     );
   }
 
@@ -313,140 +286,12 @@ class OrderRepository {
       db.orders,
     )..where((t) => t.id.equals(orderId))).getSingle();
 
-    String? newOrderNumber;
-
-    // Local Transaction
-    await db.transaction(() async {
-      // 0. Ensure Target Table Exists
-      final existingTable = await (db.select(
-        db.restaurantTables,
-      )..where((t) => t.name.equals(targetTable))).getSingleOrNull();
-
-      if (existingTable == null) {
-        await db
-            .into(db.restaurantTables)
-            .insert(
-              RestaurantTablesCompanion(
-                name: Value(targetTable),
-                status: const Value('occupied'),
-                x: const Value(0), // Default position
-                y: const Value(0),
-              ),
-            );
-      }
-
-      // 1. Find or Create Target Order Locally
-      var targetOrder =
-          await (db.select(db.orders)..where(
-                (t) =>
-                    t.tableNumber.equals(targetTable) &
-                    t.status.isIn(['pending', 'active', 'cooking', 'served']),
-              ))
-              .getSingleOrNull();
-
-      if (targetOrder == null) {
-        // Generate new Order Number locally
-        // Format: Current-Split-Timestamp
-        newOrderNumber =
-            '${currentOrder.orderNumber}-S${DateTime.now().millisecondsSinceEpoch}';
-
-        final newId = await db
-            .into(db.orders)
-            .insert(
-              OrdersCompanion(
-                orderNumber: Value(newOrderNumber!),
-                tableNumber: Value(targetTable),
-                status: const Value('pending'),
-                type: Value(currentOrder.type),
-                waiterId: Value(currentOrder.waiterId),
-              ),
-            );
-
-        targetOrder = await (db.select(
-          db.orders,
-        )..where((t) => t.id.equals(newId))).getSingle();
-      } else {
-        newOrderNumber = targetOrder.orderNumber;
-      }
-
-      // 2. Move Items Locally
-      for (var itemReq in items) {
-        final itemId = itemReq['id'] as int;
-        final qty = itemReq['quantity'] as int;
-
-        final originalItem = await (db.select(
-          db.orderItems,
-        )..where((t) => t.id.equals(itemId))).getSingle();
-
-        if (originalItem.quantity == qty) {
-          // Move full item
-          await (db.update(db.orderItems)..where((t) => t.id.equals(itemId)))
-              .write(OrderItemsCompanion(orderId: Value(targetOrder.id)));
-        } else {
-          // Split item
-          // Decrease original
-          await (db.update(
-            db.orderItems,
-          )..where((t) => t.id.equals(itemId))).write(
-            OrderItemsCompanion(quantity: Value(originalItem.quantity - qty)),
-          );
-
-          // Create new item in target
-          await db
-              .into(db.orderItems)
-              .insert(
-                originalItem
-                    .toCompanion(true)
-                    .copyWith(
-                      id: const Value.absent(), // New ID
-                      orderId: Value(targetOrder.id),
-                      quantity: Value(qty),
-                    ),
-              );
-        }
-      }
-
-      // 3. Recalculate Totals (Simplified for brevity, ideally should sum items)
-      // For now, let's trigger a full sync or just rely on next fetch?
-      // Or we can manually calc totals if we want precision offline.
-      // Let's manually sum up items for both orders to be safe.
-      await _recalculateOrderTotal(currentOrder.id);
-      await _recalculateOrderTotal(targetOrder.id);
-
-      // Check if source order empty
-      final sourceCount =
-          await (db.select(db.orderItems)
-                ..where((t) => t.orderId.equals(currentOrder.id)))
-              .get()
-              .then((l) => l.length);
-
-      if (sourceCount == 0) {
-        await (db.delete(
-          db.orders,
-        )..where((t) => t.id.equals(currentOrder.id))).go();
-      }
-    });
-
-    // Sync Upstream (Fire and Forget)
-    // Pass the newOrderNumber so backend creates same ID
+    // Online-First: Direct API call
     await syncService.splitTable(
       currentOrder.orderNumber,
       targetTable,
       items,
-      newOrderNumber: newOrderNumber,
-    );
-  }
-
-  Future<void> _recalculateOrderTotal(int orderId) async {
-    final items = await (db.select(
-      db.orderItems,
-    )..where((t) => t.orderId.equals(orderId))).get();
-    final total = items.fold(
-      0.0,
-      (sum, item) => sum + (item.priceAtTime * item.quantity),
-    );
-    await (db.update(db.orders)..where((t) => t.id.equals(orderId))).write(
-      OrdersCompanion(totalAmount: Value(total)),
+      newOrderNumber: null, // Let backend generate it
     );
   }
 

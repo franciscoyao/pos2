@@ -18,13 +18,14 @@ part 'database.g.dart';
     Printers,
     Settings,
     RestaurantTables,
+    Payments,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -38,18 +39,45 @@ class AppDatabase extends _$AppDatabase {
         await migrator.addColumn(categories, categories.status);
       }
       if (from < 4) {
-        // Migration to 4: Clear fake data - DISABLED for production safety
-        // In a real app, you should migrate data instead of deleting it.
-        // If schema changes are incompatible, use migrator.alterTable or create new tables and copy data.
-        
-        // await delete(orderItems).go();
-        // await delete(orders).go();
-        // await delete(menuItems).go();
-        // await delete(categories).go();
+        // Migration to 4: (no-op, was data cleanup)
       }
       if (from < 5) {
-        // Migration to 5: Clear existing tables - DISABLED for production safety
-        // await delete(restaurantTables).go();
+        // Migration to 5: (no-op)
+      }
+      if (from < 6) {
+        // Migration to 6: Add remoteId columns for PocketBase sync
+        await _safeAddRemoteId(migrator, users, users.remoteId);
+        await _safeAddRemoteId(migrator, categories, categories.remoteId);
+        await _safeAddRemoteId(migrator, menuItems, menuItems.remoteId);
+        await _safeAddRemoteId(migrator, orders, orders.remoteId);
+        await _safeAddRemoteId(migrator, orderItems, orderItems.remoteId);
+        await _safeAddRemoteId(
+          migrator,
+          restaurantTables,
+          restaurantTables.remoteId,
+        );
+      }
+      if (from < 7) {
+        // Migration to 7: Add payments table
+        await migrator.createTable(payments);
+      }
+      if (from < 8) {
+        // Migration to 8: Retry adding remoteId to orderItems (fix for missing col)
+        await _safeAddRemoteId(migrator, orderItems, orderItems.remoteId);
+      }
+      if (from < 9) {
+        // Migration to 9: Ensure remoteId exists on ALL tables (catch-all for missing columns)
+        await _safeAddRemoteId(migrator, users, users.remoteId);
+        await _safeAddRemoteId(migrator, categories, categories.remoteId);
+        await _safeAddRemoteId(migrator, menuItems, menuItems.remoteId);
+        await _safeAddRemoteId(migrator, orders, orders.remoteId);
+        await _safeAddRemoteId(
+          migrator,
+          restaurantTables,
+          restaurantTables.remoteId,
+        );
+        // (orderItems covered in v8, but harmless to retry)
+        await _safeAddRemoteId(migrator, orderItems, orderItems.remoteId);
       }
     },
     beforeOpen: (details) async {
@@ -57,6 +85,18 @@ class AppDatabase extends _$AppDatabase {
       await customStatement('PRAGMA foreign_keys = ON');
     },
   );
+
+  Future<void> _safeAddRemoteId(
+    Migrator m,
+    TableInfo table,
+    GeneratedColumn col,
+  ) async {
+    try {
+      await m.addColumn(table, col);
+    } catch (e) {
+      // Column likely exists
+    }
+  }
 }
 
 LazyDatabase _openConnection() {

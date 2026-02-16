@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 @DataClassName('User')
 class Users extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get fullName => text().nullable()();
   TextColumn get username => text().unique().nullable()();
   TextColumn get pin => text().nullable()(); // 4-digit PIN
@@ -15,6 +16,7 @@ class Users extends Table {
 @DataClassName('Category')
 class Categories extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get name => text()();
   TextColumn get menuType =>
       text().withDefault(const Constant('dine-in'))(); // "dine-in", "takeaway"
@@ -27,6 +29,7 @@ class Categories extends Table {
 @DataClassName('MenuItem')
 class MenuItems extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get code => text().unique().nullable()();
   TextColumn get name => text()();
   RealColumn get price => real()();
@@ -43,6 +46,7 @@ class MenuItems extends Table {
 @DataClassName('Order')
 class Orders extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get orderNumber => text().unique()();
   TextColumn get tableNumber => text().nullable()();
   TextColumn get type =>
@@ -66,6 +70,7 @@ class Orders extends Table {
 class OrderItems extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get orderId => integer().references(Orders, #id)();
+  TextColumn get remoteId => text().nullable().unique()();
   IntColumn get menuItemId => integer().references(MenuItems, #id)();
   IntColumn get quantity => integer().withDefault(const Constant(1))();
   RealColumn get priceAtTime => real()();
@@ -97,6 +102,7 @@ class Settings extends Table {
 @DataClassName('RestaurantTable')
 class RestaurantTables extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get name => text().unique()(); // e.g., "Table 1"
   TextColumn get status => text().withDefault(
     const Constant('available'),
@@ -104,4 +110,19 @@ class RestaurantTables extends Table {
   IntColumn get x =>
       integer().withDefault(const Constant(0))(); // For potential visual layout
   IntColumn get y => integer().withDefault(const Constant(0))();
+}
+
+@DataClassName('Payment')
+class Payments extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
+  IntColumn get orderId => integer().references(Orders, #id)();
+  RealColumn get amount => real()();
+  TextColumn get method => text()(); // "cash", "card", etc.
+  TextColumn get status => text().withDefault(
+    const Constant('completed'),
+  )(); // "completed", "refunded"
+  TextColumn get itemsJson =>
+      text().nullable()(); // JSON string for split items
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

@@ -763,10 +763,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
       } else {
         // Full Payment
-        final orderIds = ordersWithDetails.map((o) => o.order.id).toList();
-        await repo.markOrdersAsPaid(
-          orderIds,
-        ); // Old method, maybe replace with addPayment(total)
+        for (var orderDetail in ordersWithDetails) {
+          await repo.addPayment(
+            orderDetail.order.id,
+            orderDetail.order.totalAmount,
+            _paymentMethod,
+          );
+          await repo.updateOrderStatus(orderDetail.order.id, 'paid');
+        }
       }
 
       if (!context.mounted) return;

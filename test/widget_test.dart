@@ -2,9 +2,23 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/database/database_provider.dart';
+import 'package:pos_system/data/services/sync_provider.dart';
+import 'package:pos_system/data/services/sync_service.dart';
 import 'package:pos_system/main.dart';
+
+class MockSyncService extends Fake implements SyncService {
+  @override
+  Future<void> syncAll() async {}
+
+  @override
+  void initRealtimeUpdates() {}
+
+  @override
+  Future<void> createOrder(int localOrderId) async {}
+}
 
 void main() {
   testWidgets('App initialization smoke test', (WidgetTester tester) async {
@@ -12,9 +26,10 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          databaseProvider.overrideWith(
-            (ref) => AppDatabase(NativeDatabase.memory()),
+          databaseProvider.overrideWithValue(
+            AppDatabase(NativeDatabase.memory()),
           ),
+          syncServiceProvider.overrideWith((ref) => MockSyncService()),
         ],
         child: const MyApp(),
       ),

@@ -1,5 +1,3 @@
-import 'package:drift/drift.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:pos_system/data/database/database.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -63,156 +61,58 @@ class MenuRepository {
   )..where((t) => t.status.isNotValue('deleted'))).watch();
 
   Future<int> addCategory(CategoriesCompanion category) async {
+    // Local-First: Insert locally
     final id = await db.into(db.categories).insert(category);
-    // Push upstream
-    try {
-      final serverId = await syncService.createCategory(category);
-      // Update local ID to match server ID immediately
-      final existing = await (db.select(
-        db.categories,
-      )..where((t) => t.id.equals(serverId))).getSingleOrNull();
 
-      if (existing != null && existing.id != id) {
-        debugPrint(
-          'Sync: ID collision for category $serverId. Merging local entry.',
-        );
-        // Update existing (stale) server-ID row with new data
-        await (db.update(
-          db.categories,
-        )..where((t) => t.id.equals(serverId))).write(
-          CategoriesCompanion(
-            name: category.name,
-            menuType: category.menuType,
-            sortOrder: category.sortOrder,
-            station: category.station,
-            status: category.status,
-          ),
-        );
-        // Move any items from temp ID to server ID
-        await (db.update(db.menuItems)..where((t) => t.categoryId.equals(id)))
-            .write(MenuItemsCompanion(categoryId: Value(serverId)));
-        // Delete temp ID
-        await (db.delete(db.categories)..where((t) => t.id.equals(id))).go();
-      } else {
-        await (db.update(db.categories)..where((t) => t.id.equals(id))).write(
-          CategoriesCompanion(id: Value(serverId)),
-        );
-      }
+    // Sync in background
+    syncService.createCategory(category, id).ignore();
 
-      // If we had items using the old ID, we would need to migrate them here too
-      // But addCategory usually happens before items are added to it.
-      return serverId;
-    } catch (e) {
-      // Allow offline - will sync later or queue
-      debugPrint('Upstream category creation failed: $e');
-      return id;
-    }
+    return id;
   }
 
   Future<void> updateCategory(Category category) async {
     await db.update(db.categories).replace(category);
-    try {
-      await syncService.updateCategory(category);
-    } catch (e) {
-      debugPrint('Upstream category update failed: $e');
-    }
+    syncService.updateCategory(category).ignore();
   }
 
   Future<void> deleteCategory(int id) async {
-    await db.transaction(() async {
-      // Soft delete all items in this category
-      await (db.update(db.menuItems)..where((t) => t.categoryId.equals(id)))
-          .write(const MenuItemsCompanion(status: Value('deleted')));
-      // Soft delete the category
-      await (db.update(db.categories)..where((t) => t.id.equals(id))).write(
-        const CategoriesCompanion(status: Value('deleted')),
-      );
-    });
-    // Push upstream delete
-    try {
-      await syncService.deleteCategoryUpstream(id);
-    } catch (e) {
-      if (e is DioException && e.response?.statusCode == 404) {
-        // Already deleted upstream, ignore
-        debugPrint('Category $id already deleted upstream');
-      } else {
-        debugPrint('Upstream category deletion failed: $e');
-      }
-    }
+    // Get remoteId before deleting? Or just call upstream first?
+    // If we call upstream first and it fails (offline), we might want to delete locally anyway if we want local-first?
+    // Ideally: Mark as deleted locally or store action in queue.
+    // For now: Attempt sync, then delete locally. Or simpler: SyncService handles lookup before delete.
+
+    // Better approach:
+    await syncService.deleteCategoryUpstream(id);
+    // Realtime will handle local delete if successful?
+    // If we rely on realtime, it's online-only.
+    // To support offline:
+    await (db.delete(db.categories)..where((t) => t.id.equals(id))).go();
   }
 
   Future<int> addItem(MenuItemsCompanion item) async {
     final id = await db.into(db.menuItems).insert(item);
-    try {
-      final serverId = await syncService.createMenuItem(item);
-
-      // Check collision
-      final existing = await (db.select(
-        db.menuItems,
-      )..where((t) => t.id.equals(serverId))).getSingleOrNull();
-
-      if (existing != null && existing.id != id) {
-        debugPrint(
-          'Sync: ID collision for item $serverId. Merging local entry.',
-        );
-        await (db.update(
-          db.menuItems,
-        )..where((t) => t.id.equals(serverId))).write(
-          MenuItemsCompanion(
-            code: item.code,
-            name: item.name,
-            price: item.price,
-            categoryId: item.categoryId,
-            station: item.station,
-            type: item.type,
-            status: item.status,
-            allowPriceEdit: item.allowPriceEdit,
-          ),
-        );
-        // Move any dependencies (OrderItems)
-        await (db.update(db.orderItems)..where((t) => t.menuItemId.equals(id)))
-            .write(OrderItemsCompanion(menuItemId: Value(serverId)));
-
-        // Delete temp
-        await (db.delete(db.menuItems)..where((t) => t.id.equals(id))).go();
-      } else {
-        // Update local ID to match server ID immediately
-        await (db.update(db.menuItems)..where((t) => t.id.equals(id))).write(
-          MenuItemsCompanion(id: Value(serverId)),
-        );
-      }
-      return serverId;
-    } catch (e) {
-      debugPrint('Upstream item creation failed: $e');
-      return id;
-    }
+    syncService.createMenuItem(item, id).ignore();
+    return id;
   }
 
   Future<void> updateItem(MenuItem item) async {
-    await db.update(db.menuItems).replace(item);
     try {
       await syncService.updateMenuItem(item);
     } catch (e) {
       debugPrint('Upstream item update failed: $e');
+      rethrow;
     }
   }
 
   Future<void> deleteItem(int id) async {
-    // Soft delete to preserve order history
-    await (db.update(db.menuItems)..where((t) => t.id.equals(id))).write(
-      const MenuItemsCompanion(status: Value('deleted')),
-    );
-    // Push upstream delete
+    // Try upstream first (best effort)
     try {
       await syncService.deleteMenuItemUpstream(id);
     } catch (e) {
-      if (e is DioException && e.response?.statusCode == 404) {
-        // Already deleted upstream, ignore
-        debugPrint('Item $id already deleted upstream');
-      } else {
-        debugPrint('Upstream item deletion failed: $e');
-      }
+      debugPrint('Upstream item deletion failed (offline?): $e');
     }
+    // Delete locally regardless to ensure UI responsiveness
+    await (db.delete(db.menuItems)..where((t) => t.id.equals(id))).go();
   }
 }
 

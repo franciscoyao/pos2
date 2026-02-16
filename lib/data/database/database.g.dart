@@ -21,6 +21,18 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   static const VerificationMeta _fullNameMeta = const VerificationMeta(
     'fullName',
   );
@@ -87,6 +99,7 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    remoteId,
     fullName,
     username,
     pin,
@@ -108,6 +121,12 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('full_name')) {
       context.handle(
@@ -160,6 +179,10 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       fullName: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}full_name'],
@@ -195,6 +218,7 @@ class $UsersTable extends Users with TableInfo<$UsersTable, User> {
 
 class User extends DataClass implements Insertable<User> {
   final int id;
+  final String? remoteId;
   final String? fullName;
   final String? username;
   final String? pin;
@@ -203,6 +227,7 @@ class User extends DataClass implements Insertable<User> {
   final DateTime createdAt;
   const User({
     required this.id,
+    this.remoteId,
     this.fullName,
     this.username,
     this.pin,
@@ -214,6 +239,9 @@ class User extends DataClass implements Insertable<User> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     if (!nullToAbsent || fullName != null) {
       map['full_name'] = Variable<String>(fullName);
     }
@@ -232,6 +260,9 @@ class User extends DataClass implements Insertable<User> {
   UsersCompanion toCompanion(bool nullToAbsent) {
     return UsersCompanion(
       id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       fullName: fullName == null && nullToAbsent
           ? const Value.absent()
           : Value(fullName),
@@ -252,6 +283,7 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return User(
       id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       fullName: serializer.fromJson<String?>(json['fullName']),
       username: serializer.fromJson<String?>(json['username']),
       pin: serializer.fromJson<String?>(json['pin']),
@@ -265,6 +297,7 @@ class User extends DataClass implements Insertable<User> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'fullName': serializer.toJson<String?>(fullName),
       'username': serializer.toJson<String?>(username),
       'pin': serializer.toJson<String?>(pin),
@@ -276,6 +309,7 @@ class User extends DataClass implements Insertable<User> {
 
   User copyWith({
     int? id,
+    Value<String?> remoteId = const Value.absent(),
     Value<String?> fullName = const Value.absent(),
     Value<String?> username = const Value.absent(),
     Value<String?> pin = const Value.absent(),
@@ -284,6 +318,7 @@ class User extends DataClass implements Insertable<User> {
     DateTime? createdAt,
   }) => User(
     id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     fullName: fullName.present ? fullName.value : this.fullName,
     username: username.present ? username.value : this.username,
     pin: pin.present ? pin.value : this.pin,
@@ -294,6 +329,7 @@ class User extends DataClass implements Insertable<User> {
   User copyWithCompanion(UsersCompanion data) {
     return User(
       id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       fullName: data.fullName.present ? data.fullName.value : this.fullName,
       username: data.username.present ? data.username.value : this.username,
       pin: data.pin.present ? data.pin.value : this.pin,
@@ -307,6 +343,7 @@ class User extends DataClass implements Insertable<User> {
   String toString() {
     return (StringBuffer('User(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('fullName: $fullName, ')
           ..write('username: $username, ')
           ..write('pin: $pin, ')
@@ -318,13 +355,22 @@ class User extends DataClass implements Insertable<User> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, fullName, username, pin, role, status, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    remoteId,
+    fullName,
+    username,
+    pin,
+    role,
+    status,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is User &&
           other.id == this.id &&
+          other.remoteId == this.remoteId &&
           other.fullName == this.fullName &&
           other.username == this.username &&
           other.pin == this.pin &&
@@ -335,6 +381,7 @@ class User extends DataClass implements Insertable<User> {
 
 class UsersCompanion extends UpdateCompanion<User> {
   final Value<int> id;
+  final Value<String?> remoteId;
   final Value<String?> fullName;
   final Value<String?> username;
   final Value<String?> pin;
@@ -343,6 +390,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   final Value<DateTime> createdAt;
   const UsersCompanion({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.fullName = const Value.absent(),
     this.username = const Value.absent(),
     this.pin = const Value.absent(),
@@ -352,6 +400,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   });
   UsersCompanion.insert({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.fullName = const Value.absent(),
     this.username = const Value.absent(),
     this.pin = const Value.absent(),
@@ -361,6 +410,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   }) : role = Value(role);
   static Insertable<User> custom({
     Expression<int>? id,
+    Expression<String>? remoteId,
     Expression<String>? fullName,
     Expression<String>? username,
     Expression<String>? pin,
@@ -370,6 +420,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
       if (fullName != null) 'full_name': fullName,
       if (username != null) 'username': username,
       if (pin != null) 'pin': pin,
@@ -381,6 +432,7 @@ class UsersCompanion extends UpdateCompanion<User> {
 
   UsersCompanion copyWith({
     Value<int>? id,
+    Value<String?>? remoteId,
     Value<String?>? fullName,
     Value<String?>? username,
     Value<String?>? pin,
@@ -390,6 +442,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   }) {
     return UsersCompanion(
       id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
       fullName: fullName ?? this.fullName,
       username: username ?? this.username,
       pin: pin ?? this.pin,
@@ -404,6 +457,9 @@ class UsersCompanion extends UpdateCompanion<User> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (fullName.present) {
       map['full_name'] = Variable<String>(fullName.value);
@@ -430,6 +486,7 @@ class UsersCompanion extends UpdateCompanion<User> {
   String toString() {
     return (StringBuffer('UsersCompanion(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('fullName: $fullName, ')
           ..write('username: $username, ')
           ..write('pin: $pin, ')
@@ -459,6 +516,18 @@ class $CategoriesTable extends Categories
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
@@ -517,6 +586,7 @@ class $CategoriesTable extends Categories
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    remoteId,
     name,
     menuType,
     sortOrder,
@@ -537,6 +607,12 @@ class $CategoriesTable extends Categories
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -583,6 +659,10 @@ class $CategoriesTable extends Categories
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -614,6 +694,7 @@ class $CategoriesTable extends Categories
 
 class Category extends DataClass implements Insertable<Category> {
   final int id;
+  final String? remoteId;
   final String name;
   final String menuType;
   final int sortOrder;
@@ -621,6 +702,7 @@ class Category extends DataClass implements Insertable<Category> {
   final String status;
   const Category({
     required this.id,
+    this.remoteId,
     required this.name,
     required this.menuType,
     required this.sortOrder,
@@ -631,6 +713,9 @@ class Category extends DataClass implements Insertable<Category> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     map['name'] = Variable<String>(name);
     map['menu_type'] = Variable<String>(menuType);
     map['sort_order'] = Variable<int>(sortOrder);
@@ -644,6 +729,9 @@ class Category extends DataClass implements Insertable<Category> {
   CategoriesCompanion toCompanion(bool nullToAbsent) {
     return CategoriesCompanion(
       id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       name: Value(name),
       menuType: Value(menuType),
       sortOrder: Value(sortOrder),
@@ -661,6 +749,7 @@ class Category extends DataClass implements Insertable<Category> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Category(
       id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       name: serializer.fromJson<String>(json['name']),
       menuType: serializer.fromJson<String>(json['menuType']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
@@ -673,6 +762,7 @@ class Category extends DataClass implements Insertable<Category> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'name': serializer.toJson<String>(name),
       'menuType': serializer.toJson<String>(menuType),
       'sortOrder': serializer.toJson<int>(sortOrder),
@@ -683,6 +773,7 @@ class Category extends DataClass implements Insertable<Category> {
 
   Category copyWith({
     int? id,
+    Value<String?> remoteId = const Value.absent(),
     String? name,
     String? menuType,
     int? sortOrder,
@@ -690,6 +781,7 @@ class Category extends DataClass implements Insertable<Category> {
     String? status,
   }) => Category(
     id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     name: name ?? this.name,
     menuType: menuType ?? this.menuType,
     sortOrder: sortOrder ?? this.sortOrder,
@@ -699,6 +791,7 @@ class Category extends DataClass implements Insertable<Category> {
   Category copyWithCompanion(CategoriesCompanion data) {
     return Category(
       id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       name: data.name.present ? data.name.value : this.name,
       menuType: data.menuType.present ? data.menuType.value : this.menuType,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
@@ -711,6 +804,7 @@ class Category extends DataClass implements Insertable<Category> {
   String toString() {
     return (StringBuffer('Category(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
           ..write('menuType: $menuType, ')
           ..write('sortOrder: $sortOrder, ')
@@ -722,12 +816,13 @@ class Category extends DataClass implements Insertable<Category> {
 
   @override
   int get hashCode =>
-      Object.hash(id, name, menuType, sortOrder, station, status);
+      Object.hash(id, remoteId, name, menuType, sortOrder, station, status);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is Category &&
           other.id == this.id &&
+          other.remoteId == this.remoteId &&
           other.name == this.name &&
           other.menuType == this.menuType &&
           other.sortOrder == this.sortOrder &&
@@ -737,6 +832,7 @@ class Category extends DataClass implements Insertable<Category> {
 
 class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<int> id;
+  final Value<String?> remoteId;
   final Value<String> name;
   final Value<String> menuType;
   final Value<int> sortOrder;
@@ -744,6 +840,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> status;
   const CategoriesCompanion({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.name = const Value.absent(),
     this.menuType = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -752,6 +849,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   });
   CategoriesCompanion.insert({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     required String name,
     this.menuType = const Value.absent(),
     this.sortOrder = const Value.absent(),
@@ -760,6 +858,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }) : name = Value(name);
   static Insertable<Category> custom({
     Expression<int>? id,
+    Expression<String>? remoteId,
     Expression<String>? name,
     Expression<String>? menuType,
     Expression<int>? sortOrder,
@@ -768,6 +867,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
       if (name != null) 'name': name,
       if (menuType != null) 'menu_type': menuType,
       if (sortOrder != null) 'sort_order': sortOrder,
@@ -778,6 +878,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
 
   CategoriesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? remoteId,
     Value<String>? name,
     Value<String>? menuType,
     Value<int>? sortOrder,
@@ -786,6 +887,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }) {
     return CategoriesCompanion(
       id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
       name: name ?? this.name,
       menuType: menuType ?? this.menuType,
       sortOrder: sortOrder ?? this.sortOrder,
@@ -799,6 +901,9 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -822,6 +927,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   String toString() {
     return (StringBuffer('CategoriesCompanion(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
           ..write('menuType: $menuType, ')
           ..write('sortOrder: $sortOrder, ')
@@ -850,6 +956,18 @@ class $MenuItemsTable extends MenuItems
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _codeMeta = const VerificationMeta('code');
   @override
@@ -943,6 +1061,7 @@ class $MenuItemsTable extends MenuItems
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    remoteId,
     code,
     name,
     price,
@@ -966,6 +1085,12 @@ class $MenuItemsTable extends MenuItems
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('code')) {
       context.handle(
@@ -1037,6 +1162,10 @@ class $MenuItemsTable extends MenuItems
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       code: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}code'],
@@ -1080,6 +1209,7 @@ class $MenuItemsTable extends MenuItems
 
 class MenuItem extends DataClass implements Insertable<MenuItem> {
   final int id;
+  final String? remoteId;
   final String? code;
   final String name;
   final double price;
@@ -1090,6 +1220,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   final bool allowPriceEdit;
   const MenuItem({
     required this.id,
+    this.remoteId,
     this.code,
     required this.name,
     required this.price,
@@ -1103,6 +1234,9 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     if (!nullToAbsent || code != null) {
       map['code'] = Variable<String>(code);
     }
@@ -1119,6 +1253,9 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   MenuItemsCompanion toCompanion(bool nullToAbsent) {
     return MenuItemsCompanion(
       id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       code: code == null && nullToAbsent ? const Value.absent() : Value(code),
       name: Value(name),
       price: Value(price),
@@ -1137,6 +1274,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return MenuItem(
       id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       code: serializer.fromJson<String?>(json['code']),
       name: serializer.fromJson<String>(json['name']),
       price: serializer.fromJson<double>(json['price']),
@@ -1152,6 +1290,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'code': serializer.toJson<String?>(code),
       'name': serializer.toJson<String>(name),
       'price': serializer.toJson<double>(price),
@@ -1165,6 +1304,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
 
   MenuItem copyWith({
     int? id,
+    Value<String?> remoteId = const Value.absent(),
     Value<String?> code = const Value.absent(),
     String? name,
     double? price,
@@ -1175,6 +1315,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
     bool? allowPriceEdit,
   }) => MenuItem(
     id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     code: code.present ? code.value : this.code,
     name: name ?? this.name,
     price: price ?? this.price,
@@ -1187,6 +1328,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   MenuItem copyWithCompanion(MenuItemsCompanion data) {
     return MenuItem(
       id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       code: data.code.present ? data.code.value : this.code,
       name: data.name.present ? data.name.value : this.name,
       price: data.price.present ? data.price.value : this.price,
@@ -1206,6 +1348,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   String toString() {
     return (StringBuffer('MenuItem(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('code: $code, ')
           ..write('name: $name, ')
           ..write('price: $price, ')
@@ -1221,6 +1364,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
   @override
   int get hashCode => Object.hash(
     id,
+    remoteId,
     code,
     name,
     price,
@@ -1235,6 +1379,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
       identical(this, other) ||
       (other is MenuItem &&
           other.id == this.id &&
+          other.remoteId == this.remoteId &&
           other.code == this.code &&
           other.name == this.name &&
           other.price == this.price &&
@@ -1247,6 +1392,7 @@ class MenuItem extends DataClass implements Insertable<MenuItem> {
 
 class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   final Value<int> id;
+  final Value<String?> remoteId;
   final Value<String?> code;
   final Value<String> name;
   final Value<double> price;
@@ -1257,6 +1403,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   final Value<bool> allowPriceEdit;
   const MenuItemsCompanion({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.code = const Value.absent(),
     this.name = const Value.absent(),
     this.price = const Value.absent(),
@@ -1268,6 +1415,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   });
   MenuItemsCompanion.insert({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.code = const Value.absent(),
     required String name,
     required double price,
@@ -1281,6 +1429,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
        categoryId = Value(categoryId);
   static Insertable<MenuItem> custom({
     Expression<int>? id,
+    Expression<String>? remoteId,
     Expression<String>? code,
     Expression<String>? name,
     Expression<double>? price,
@@ -1292,6 +1441,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
       if (code != null) 'code': code,
       if (name != null) 'name': name,
       if (price != null) 'price': price,
@@ -1305,6 +1455,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
 
   MenuItemsCompanion copyWith({
     Value<int>? id,
+    Value<String?>? remoteId,
     Value<String?>? code,
     Value<String>? name,
     Value<double>? price,
@@ -1316,6 +1467,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   }) {
     return MenuItemsCompanion(
       id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
       code: code ?? this.code,
       name: name ?? this.name,
       price: price ?? this.price,
@@ -1332,6 +1484,9 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (code.present) {
       map['code'] = Variable<String>(code.value);
@@ -1364,6 +1519,7 @@ class MenuItemsCompanion extends UpdateCompanion<MenuItem> {
   String toString() {
     return (StringBuffer('MenuItemsCompanion(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('code: $code, ')
           ..write('name: $name, ')
           ..write('price: $price, ')
@@ -1394,6 +1550,18 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'PRIMARY KEY AUTOINCREMENT',
     ),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _orderNumberMeta = const VerificationMeta(
     'orderNumber',
@@ -1548,6 +1716,7 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
   @override
   List<GeneratedColumn> get $columns => [
     id,
+    remoteId,
     orderNumber,
     tableNumber,
     type,
@@ -1576,6 +1745,12 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('order_number')) {
       context.handle(
@@ -1688,6 +1863,10 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       orderNumber: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}order_number'],
@@ -1751,6 +1930,7 @@ class $OrdersTable extends Orders with TableInfo<$OrdersTable, Order> {
 
 class Order extends DataClass implements Insertable<Order> {
   final int id;
+  final String? remoteId;
   final String orderNumber;
   final String? tableNumber;
   final String type;
@@ -1766,6 +1946,7 @@ class Order extends DataClass implements Insertable<Order> {
   final DateTime? completedAt;
   const Order({
     required this.id,
+    this.remoteId,
     required this.orderNumber,
     this.tableNumber,
     required this.type,
@@ -1784,6 +1965,9 @@ class Order extends DataClass implements Insertable<Order> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     map['order_number'] = Variable<String>(orderNumber);
     if (!nullToAbsent || tableNumber != null) {
       map['table_number'] = Variable<String>(tableNumber);
@@ -1813,6 +1997,9 @@ class Order extends DataClass implements Insertable<Order> {
   OrdersCompanion toCompanion(bool nullToAbsent) {
     return OrdersCompanion(
       id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       orderNumber: Value(orderNumber),
       tableNumber: tableNumber == null && nullToAbsent
           ? const Value.absent()
@@ -1846,6 +2033,7 @@ class Order extends DataClass implements Insertable<Order> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Order(
       id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       orderNumber: serializer.fromJson<String>(json['orderNumber']),
       tableNumber: serializer.fromJson<String?>(json['tableNumber']),
       type: serializer.fromJson<String>(json['type']),
@@ -1866,6 +2054,7 @@ class Order extends DataClass implements Insertable<Order> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'orderNumber': serializer.toJson<String>(orderNumber),
       'tableNumber': serializer.toJson<String?>(tableNumber),
       'type': serializer.toJson<String>(type),
@@ -1884,6 +2073,7 @@ class Order extends DataClass implements Insertable<Order> {
 
   Order copyWith({
     int? id,
+    Value<String?> remoteId = const Value.absent(),
     String? orderNumber,
     Value<String?> tableNumber = const Value.absent(),
     String? type,
@@ -1899,6 +2089,7 @@ class Order extends DataClass implements Insertable<Order> {
     Value<DateTime?> completedAt = const Value.absent(),
   }) => Order(
     id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     orderNumber: orderNumber ?? this.orderNumber,
     tableNumber: tableNumber.present ? tableNumber.value : this.tableNumber,
     type: type ?? this.type,
@@ -1918,6 +2109,7 @@ class Order extends DataClass implements Insertable<Order> {
   Order copyWithCompanion(OrdersCompanion data) {
     return Order(
       id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       orderNumber: data.orderNumber.present
           ? data.orderNumber.value
           : this.orderNumber,
@@ -1950,6 +2142,7 @@ class Order extends DataClass implements Insertable<Order> {
   String toString() {
     return (StringBuffer('Order(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('orderNumber: $orderNumber, ')
           ..write('tableNumber: $tableNumber, ')
           ..write('type: $type, ')
@@ -1970,6 +2163,7 @@ class Order extends DataClass implements Insertable<Order> {
   @override
   int get hashCode => Object.hash(
     id,
+    remoteId,
     orderNumber,
     tableNumber,
     type,
@@ -1989,6 +2183,7 @@ class Order extends DataClass implements Insertable<Order> {
       identical(this, other) ||
       (other is Order &&
           other.id == this.id &&
+          other.remoteId == this.remoteId &&
           other.orderNumber == this.orderNumber &&
           other.tableNumber == this.tableNumber &&
           other.type == this.type &&
@@ -2006,6 +2201,7 @@ class Order extends DataClass implements Insertable<Order> {
 
 class OrdersCompanion extends UpdateCompanion<Order> {
   final Value<int> id;
+  final Value<String?> remoteId;
   final Value<String> orderNumber;
   final Value<String?> tableNumber;
   final Value<String> type;
@@ -2021,6 +2217,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   final Value<DateTime?> completedAt;
   const OrdersCompanion({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.orderNumber = const Value.absent(),
     this.tableNumber = const Value.absent(),
     this.type = const Value.absent(),
@@ -2037,6 +2234,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   });
   OrdersCompanion.insert({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     required String orderNumber,
     this.tableNumber = const Value.absent(),
     this.type = const Value.absent(),
@@ -2053,6 +2251,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   }) : orderNumber = Value(orderNumber);
   static Insertable<Order> custom({
     Expression<int>? id,
+    Expression<String>? remoteId,
     Expression<String>? orderNumber,
     Expression<String>? tableNumber,
     Expression<String>? type,
@@ -2069,6 +2268,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
       if (orderNumber != null) 'order_number': orderNumber,
       if (tableNumber != null) 'table_number': tableNumber,
       if (type != null) 'type': type,
@@ -2087,6 +2287,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
 
   OrdersCompanion copyWith({
     Value<int>? id,
+    Value<String?>? remoteId,
     Value<String>? orderNumber,
     Value<String?>? tableNumber,
     Value<String>? type,
@@ -2103,6 +2304,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   }) {
     return OrdersCompanion(
       id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
       orderNumber: orderNumber ?? this.orderNumber,
       tableNumber: tableNumber ?? this.tableNumber,
       type: type ?? this.type,
@@ -2124,6 +2326,9 @@ class OrdersCompanion extends UpdateCompanion<Order> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (orderNumber.present) {
       map['order_number'] = Variable<String>(orderNumber.value);
@@ -2171,6 +2376,7 @@ class OrdersCompanion extends UpdateCompanion<Order> {
   String toString() {
     return (StringBuffer('OrdersCompanion(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('orderNumber: $orderNumber, ')
           ..write('tableNumber: $tableNumber, ')
           ..write('type: $type, ')
@@ -2221,6 +2427,18 @@ class $OrderItemsTable extends OrderItems
     defaultConstraints: GeneratedColumn.constraintIsAlways(
       'REFERENCES orders (id)',
     ),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
   );
   static const VerificationMeta _menuItemIdMeta = const VerificationMeta(
     'menuItemId',
@@ -2273,6 +2491,7 @@ class $OrderItemsTable extends OrderItems
   List<GeneratedColumn> get $columns => [
     id,
     orderId,
+    remoteId,
     menuItemId,
     quantity,
     priceAtTime,
@@ -2300,6 +2519,12 @@ class $OrderItemsTable extends OrderItems
       );
     } else if (isInserting) {
       context.missing(_orderIdMeta);
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('menu_item_id')) {
       context.handle(
@@ -2352,6 +2577,10 @@ class $OrderItemsTable extends OrderItems
         DriftSqlType.int,
         data['${effectivePrefix}order_id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       menuItemId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}menu_item_id'],
@@ -2380,6 +2609,7 @@ class $OrderItemsTable extends OrderItems
 class OrderItem extends DataClass implements Insertable<OrderItem> {
   final int id;
   final int orderId;
+  final String? remoteId;
   final int menuItemId;
   final int quantity;
   final double priceAtTime;
@@ -2387,6 +2617,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   const OrderItem({
     required this.id,
     required this.orderId,
+    this.remoteId,
     required this.menuItemId,
     required this.quantity,
     required this.priceAtTime,
@@ -2397,6 +2628,9 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
     map['order_id'] = Variable<int>(orderId);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     map['menu_item_id'] = Variable<int>(menuItemId);
     map['quantity'] = Variable<int>(quantity);
     map['price_at_time'] = Variable<double>(priceAtTime);
@@ -2408,6 +2642,9 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     return OrderItemsCompanion(
       id: Value(id),
       orderId: Value(orderId),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       menuItemId: Value(menuItemId),
       quantity: Value(quantity),
       priceAtTime: Value(priceAtTime),
@@ -2423,6 +2660,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     return OrderItem(
       id: serializer.fromJson<int>(json['id']),
       orderId: serializer.fromJson<int>(json['orderId']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       menuItemId: serializer.fromJson<int>(json['menuItemId']),
       quantity: serializer.fromJson<int>(json['quantity']),
       priceAtTime: serializer.fromJson<double>(json['priceAtTime']),
@@ -2435,6 +2673,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
       'orderId': serializer.toJson<int>(orderId),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'menuItemId': serializer.toJson<int>(menuItemId),
       'quantity': serializer.toJson<int>(quantity),
       'priceAtTime': serializer.toJson<double>(priceAtTime),
@@ -2445,6 +2684,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   OrderItem copyWith({
     int? id,
     int? orderId,
+    Value<String?> remoteId = const Value.absent(),
     int? menuItemId,
     int? quantity,
     double? priceAtTime,
@@ -2452,6 +2692,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   }) => OrderItem(
     id: id ?? this.id,
     orderId: orderId ?? this.orderId,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     menuItemId: menuItemId ?? this.menuItemId,
     quantity: quantity ?? this.quantity,
     priceAtTime: priceAtTime ?? this.priceAtTime,
@@ -2461,6 +2702,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     return OrderItem(
       id: data.id.present ? data.id.value : this.id,
       orderId: data.orderId.present ? data.orderId.value : this.orderId,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       menuItemId: data.menuItemId.present
           ? data.menuItemId.value
           : this.menuItemId,
@@ -2477,6 +2719,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
     return (StringBuffer('OrderItem(')
           ..write('id: $id, ')
           ..write('orderId: $orderId, ')
+          ..write('remoteId: $remoteId, ')
           ..write('menuItemId: $menuItemId, ')
           ..write('quantity: $quantity, ')
           ..write('priceAtTime: $priceAtTime, ')
@@ -2486,14 +2729,22 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, orderId, menuItemId, quantity, priceAtTime, status);
+  int get hashCode => Object.hash(
+    id,
+    orderId,
+    remoteId,
+    menuItemId,
+    quantity,
+    priceAtTime,
+    status,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is OrderItem &&
           other.id == this.id &&
           other.orderId == this.orderId &&
+          other.remoteId == this.remoteId &&
           other.menuItemId == this.menuItemId &&
           other.quantity == this.quantity &&
           other.priceAtTime == this.priceAtTime &&
@@ -2503,6 +2754,7 @@ class OrderItem extends DataClass implements Insertable<OrderItem> {
 class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   final Value<int> id;
   final Value<int> orderId;
+  final Value<String?> remoteId;
   final Value<int> menuItemId;
   final Value<int> quantity;
   final Value<double> priceAtTime;
@@ -2510,6 +2762,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   const OrderItemsCompanion({
     this.id = const Value.absent(),
     this.orderId = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.menuItemId = const Value.absent(),
     this.quantity = const Value.absent(),
     this.priceAtTime = const Value.absent(),
@@ -2518,6 +2771,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   OrderItemsCompanion.insert({
     this.id = const Value.absent(),
     required int orderId,
+    this.remoteId = const Value.absent(),
     required int menuItemId,
     this.quantity = const Value.absent(),
     required double priceAtTime,
@@ -2528,6 +2782,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   static Insertable<OrderItem> custom({
     Expression<int>? id,
     Expression<int>? orderId,
+    Expression<String>? remoteId,
     Expression<int>? menuItemId,
     Expression<int>? quantity,
     Expression<double>? priceAtTime,
@@ -2536,6 +2791,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (orderId != null) 'order_id': orderId,
+      if (remoteId != null) 'remote_id': remoteId,
       if (menuItemId != null) 'menu_item_id': menuItemId,
       if (quantity != null) 'quantity': quantity,
       if (priceAtTime != null) 'price_at_time': priceAtTime,
@@ -2546,6 +2802,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
   OrderItemsCompanion copyWith({
     Value<int>? id,
     Value<int>? orderId,
+    Value<String?>? remoteId,
     Value<int>? menuItemId,
     Value<int>? quantity,
     Value<double>? priceAtTime,
@@ -2554,6 +2811,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     return OrderItemsCompanion(
       id: id ?? this.id,
       orderId: orderId ?? this.orderId,
+      remoteId: remoteId ?? this.remoteId,
       menuItemId: menuItemId ?? this.menuItemId,
       quantity: quantity ?? this.quantity,
       priceAtTime: priceAtTime ?? this.priceAtTime,
@@ -2569,6 +2827,9 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     }
     if (orderId.present) {
       map['order_id'] = Variable<int>(orderId.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (menuItemId.present) {
       map['menu_item_id'] = Variable<int>(menuItemId.value);
@@ -2590,6 +2851,7 @@ class OrderItemsCompanion extends UpdateCompanion<OrderItem> {
     return (StringBuffer('OrderItemsCompanion(')
           ..write('id: $id, ')
           ..write('orderId: $orderId, ')
+          ..write('remoteId: $remoteId, ')
           ..write('menuItemId: $menuItemId, ')
           ..write('quantity: $quantity, ')
           ..write('priceAtTime: $priceAtTime, ')
@@ -3374,6 +3636,18 @@ class $RestaurantTablesTable extends RestaurantTables
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
   static const VerificationMeta _nameMeta = const VerificationMeta('name');
   @override
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
@@ -3415,7 +3689,7 @@ class $RestaurantTablesTable extends RestaurantTables
     defaultValue: const Constant(0),
   );
   @override
-  List<GeneratedColumn> get $columns => [id, name, status, x, y];
+  List<GeneratedColumn> get $columns => [id, remoteId, name, status, x, y];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3430,6 +3704,12 @@ class $RestaurantTablesTable extends RestaurantTables
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
     }
     if (data.containsKey('name')) {
       context.handle(
@@ -3464,6 +3744,10 @@ class $RestaurantTablesTable extends RestaurantTables
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
       name: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}name'],
@@ -3491,12 +3775,14 @@ class $RestaurantTablesTable extends RestaurantTables
 
 class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   final int id;
+  final String? remoteId;
   final String name;
   final String status;
   final int x;
   final int y;
   const RestaurantTable({
     required this.id,
+    this.remoteId,
     required this.name,
     required this.status,
     required this.x,
@@ -3506,6 +3792,9 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
     map['name'] = Variable<String>(name);
     map['status'] = Variable<String>(status);
     map['x'] = Variable<int>(x);
@@ -3516,6 +3805,9 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   RestaurantTablesCompanion toCompanion(bool nullToAbsent) {
     return RestaurantTablesCompanion(
       id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
       name: Value(name),
       status: Value(status),
       x: Value(x),
@@ -3530,6 +3822,7 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return RestaurantTable(
       id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
       name: serializer.fromJson<String>(json['name']),
       status: serializer.fromJson<String>(json['status']),
       x: serializer.fromJson<int>(json['x']),
@@ -3541,6 +3834,7 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
       'name': serializer.toJson<String>(name),
       'status': serializer.toJson<String>(status),
       'x': serializer.toJson<int>(x),
@@ -3550,12 +3844,14 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
 
   RestaurantTable copyWith({
     int? id,
+    Value<String?> remoteId = const Value.absent(),
     String? name,
     String? status,
     int? x,
     int? y,
   }) => RestaurantTable(
     id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
     name: name ?? this.name,
     status: status ?? this.status,
     x: x ?? this.x,
@@ -3564,6 +3860,7 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   RestaurantTable copyWithCompanion(RestaurantTablesCompanion data) {
     return RestaurantTable(
       id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
       name: data.name.present ? data.name.value : this.name,
       status: data.status.present ? data.status.value : this.status,
       x: data.x.present ? data.x.value : this.x,
@@ -3575,6 +3872,7 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   String toString() {
     return (StringBuffer('RestaurantTable(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
           ..write('status: $status, ')
           ..write('x: $x, ')
@@ -3584,12 +3882,13 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
   }
 
   @override
-  int get hashCode => Object.hash(id, name, status, x, y);
+  int get hashCode => Object.hash(id, remoteId, name, status, x, y);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is RestaurantTable &&
           other.id == this.id &&
+          other.remoteId == this.remoteId &&
           other.name == this.name &&
           other.status == this.status &&
           other.x == this.x &&
@@ -3598,12 +3897,14 @@ class RestaurantTable extends DataClass implements Insertable<RestaurantTable> {
 
 class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   final Value<int> id;
+  final Value<String?> remoteId;
   final Value<String> name;
   final Value<String> status;
   final Value<int> x;
   final Value<int> y;
   const RestaurantTablesCompanion({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     this.name = const Value.absent(),
     this.status = const Value.absent(),
     this.x = const Value.absent(),
@@ -3611,6 +3912,7 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   });
   RestaurantTablesCompanion.insert({
     this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
     required String name,
     this.status = const Value.absent(),
     this.x = const Value.absent(),
@@ -3618,6 +3920,7 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   }) : name = Value(name);
   static Insertable<RestaurantTable> custom({
     Expression<int>? id,
+    Expression<String>? remoteId,
     Expression<String>? name,
     Expression<String>? status,
     Expression<int>? x,
@@ -3625,6 +3928,7 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
       if (name != null) 'name': name,
       if (status != null) 'status': status,
       if (x != null) 'x': x,
@@ -3634,6 +3938,7 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
 
   RestaurantTablesCompanion copyWith({
     Value<int>? id,
+    Value<String?>? remoteId,
     Value<String>? name,
     Value<String>? status,
     Value<int>? x,
@@ -3641,6 +3946,7 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   }) {
     return RestaurantTablesCompanion(
       id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
       name: name ?? this.name,
       status: status ?? this.status,
       x: x ?? this.x,
@@ -3653,6 +3959,9 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
     }
     if (name.present) {
       map['name'] = Variable<String>(name.value);
@@ -3673,10 +3982,508 @@ class RestaurantTablesCompanion extends UpdateCompanion<RestaurantTable> {
   String toString() {
     return (StringBuffer('RestaurantTablesCompanion(')
           ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
           ..write('name: $name, ')
           ..write('status: $status, ')
           ..write('x: $x, ')
           ..write('y: $y')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $PaymentsTable extends Payments with TableInfo<$PaymentsTable, Payment> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $PaymentsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _remoteIdMeta = const VerificationMeta(
+    'remoteId',
+  );
+  @override
+  late final GeneratedColumn<String> remoteId = GeneratedColumn<String>(
+    'remote_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _orderIdMeta = const VerificationMeta(
+    'orderId',
+  );
+  @override
+  late final GeneratedColumn<int> orderId = GeneratedColumn<int>(
+    'order_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES orders (id)',
+    ),
+  );
+  static const VerificationMeta _amountMeta = const VerificationMeta('amount');
+  @override
+  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+    'amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _methodMeta = const VerificationMeta('method');
+  @override
+  late final GeneratedColumn<String> method = GeneratedColumn<String>(
+    'method',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('completed'),
+  );
+  static const VerificationMeta _itemsJsonMeta = const VerificationMeta(
+    'itemsJson',
+  );
+  @override
+  late final GeneratedColumn<String> itemsJson = GeneratedColumn<String>(
+    'items_json',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    remoteId,
+    orderId,
+    amount,
+    method,
+    status,
+    itemsJson,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'payments';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Payment> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('remote_id')) {
+      context.handle(
+        _remoteIdMeta,
+        remoteId.isAcceptableOrUnknown(data['remote_id']!, _remoteIdMeta),
+      );
+    }
+    if (data.containsKey('order_id')) {
+      context.handle(
+        _orderIdMeta,
+        orderId.isAcceptableOrUnknown(data['order_id']!, _orderIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_orderIdMeta);
+    }
+    if (data.containsKey('amount')) {
+      context.handle(
+        _amountMeta,
+        amount.isAcceptableOrUnknown(data['amount']!, _amountMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_amountMeta);
+    }
+    if (data.containsKey('method')) {
+      context.handle(
+        _methodMeta,
+        method.isAcceptableOrUnknown(data['method']!, _methodMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_methodMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('items_json')) {
+      context.handle(
+        _itemsJsonMeta,
+        itemsJson.isAcceptableOrUnknown(data['items_json']!, _itemsJsonMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Payment map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Payment(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      remoteId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}remote_id'],
+      ),
+      orderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}order_id'],
+      )!,
+      amount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}amount'],
+      )!,
+      method: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}method'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      itemsJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}items_json'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $PaymentsTable createAlias(String alias) {
+    return $PaymentsTable(attachedDatabase, alias);
+  }
+}
+
+class Payment extends DataClass implements Insertable<Payment> {
+  final int id;
+  final String? remoteId;
+  final int orderId;
+  final double amount;
+  final String method;
+  final String status;
+  final String? itemsJson;
+  final DateTime createdAt;
+  const Payment({
+    required this.id,
+    this.remoteId,
+    required this.orderId,
+    required this.amount,
+    required this.method,
+    required this.status,
+    this.itemsJson,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    if (!nullToAbsent || remoteId != null) {
+      map['remote_id'] = Variable<String>(remoteId);
+    }
+    map['order_id'] = Variable<int>(orderId);
+    map['amount'] = Variable<double>(amount);
+    map['method'] = Variable<String>(method);
+    map['status'] = Variable<String>(status);
+    if (!nullToAbsent || itemsJson != null) {
+      map['items_json'] = Variable<String>(itemsJson);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  PaymentsCompanion toCompanion(bool nullToAbsent) {
+    return PaymentsCompanion(
+      id: Value(id),
+      remoteId: remoteId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteId),
+      orderId: Value(orderId),
+      amount: Value(amount),
+      method: Value(method),
+      status: Value(status),
+      itemsJson: itemsJson == null && nullToAbsent
+          ? const Value.absent()
+          : Value(itemsJson),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Payment.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Payment(
+      id: serializer.fromJson<int>(json['id']),
+      remoteId: serializer.fromJson<String?>(json['remoteId']),
+      orderId: serializer.fromJson<int>(json['orderId']),
+      amount: serializer.fromJson<double>(json['amount']),
+      method: serializer.fromJson<String>(json['method']),
+      status: serializer.fromJson<String>(json['status']),
+      itemsJson: serializer.fromJson<String?>(json['itemsJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'remoteId': serializer.toJson<String?>(remoteId),
+      'orderId': serializer.toJson<int>(orderId),
+      'amount': serializer.toJson<double>(amount),
+      'method': serializer.toJson<String>(method),
+      'status': serializer.toJson<String>(status),
+      'itemsJson': serializer.toJson<String?>(itemsJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Payment copyWith({
+    int? id,
+    Value<String?> remoteId = const Value.absent(),
+    int? orderId,
+    double? amount,
+    String? method,
+    String? status,
+    Value<String?> itemsJson = const Value.absent(),
+    DateTime? createdAt,
+  }) => Payment(
+    id: id ?? this.id,
+    remoteId: remoteId.present ? remoteId.value : this.remoteId,
+    orderId: orderId ?? this.orderId,
+    amount: amount ?? this.amount,
+    method: method ?? this.method,
+    status: status ?? this.status,
+    itemsJson: itemsJson.present ? itemsJson.value : this.itemsJson,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Payment copyWithCompanion(PaymentsCompanion data) {
+    return Payment(
+      id: data.id.present ? data.id.value : this.id,
+      remoteId: data.remoteId.present ? data.remoteId.value : this.remoteId,
+      orderId: data.orderId.present ? data.orderId.value : this.orderId,
+      amount: data.amount.present ? data.amount.value : this.amount,
+      method: data.method.present ? data.method.value : this.method,
+      status: data.status.present ? data.status.value : this.status,
+      itemsJson: data.itemsJson.present ? data.itemsJson.value : this.itemsJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Payment(')
+          ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('orderId: $orderId, ')
+          ..write('amount: $amount, ')
+          ..write('method: $method, ')
+          ..write('status: $status, ')
+          ..write('itemsJson: $itemsJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    remoteId,
+    orderId,
+    amount,
+    method,
+    status,
+    itemsJson,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Payment &&
+          other.id == this.id &&
+          other.remoteId == this.remoteId &&
+          other.orderId == this.orderId &&
+          other.amount == this.amount &&
+          other.method == this.method &&
+          other.status == this.status &&
+          other.itemsJson == this.itemsJson &&
+          other.createdAt == this.createdAt);
+}
+
+class PaymentsCompanion extends UpdateCompanion<Payment> {
+  final Value<int> id;
+  final Value<String?> remoteId;
+  final Value<int> orderId;
+  final Value<double> amount;
+  final Value<String> method;
+  final Value<String> status;
+  final Value<String?> itemsJson;
+  final Value<DateTime> createdAt;
+  const PaymentsCompanion({
+    this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
+    this.orderId = const Value.absent(),
+    this.amount = const Value.absent(),
+    this.method = const Value.absent(),
+    this.status = const Value.absent(),
+    this.itemsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  PaymentsCompanion.insert({
+    this.id = const Value.absent(),
+    this.remoteId = const Value.absent(),
+    required int orderId,
+    required double amount,
+    required String method,
+    this.status = const Value.absent(),
+    this.itemsJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : orderId = Value(orderId),
+       amount = Value(amount),
+       method = Value(method);
+  static Insertable<Payment> custom({
+    Expression<int>? id,
+    Expression<String>? remoteId,
+    Expression<int>? orderId,
+    Expression<double>? amount,
+    Expression<String>? method,
+    Expression<String>? status,
+    Expression<String>? itemsJson,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (remoteId != null) 'remote_id': remoteId,
+      if (orderId != null) 'order_id': orderId,
+      if (amount != null) 'amount': amount,
+      if (method != null) 'method': method,
+      if (status != null) 'status': status,
+      if (itemsJson != null) 'items_json': itemsJson,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  PaymentsCompanion copyWith({
+    Value<int>? id,
+    Value<String?>? remoteId,
+    Value<int>? orderId,
+    Value<double>? amount,
+    Value<String>? method,
+    Value<String>? status,
+    Value<String?>? itemsJson,
+    Value<DateTime>? createdAt,
+  }) {
+    return PaymentsCompanion(
+      id: id ?? this.id,
+      remoteId: remoteId ?? this.remoteId,
+      orderId: orderId ?? this.orderId,
+      amount: amount ?? this.amount,
+      method: method ?? this.method,
+      status: status ?? this.status,
+      itemsJson: itemsJson ?? this.itemsJson,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (remoteId.present) {
+      map['remote_id'] = Variable<String>(remoteId.value);
+    }
+    if (orderId.present) {
+      map['order_id'] = Variable<int>(orderId.value);
+    }
+    if (amount.present) {
+      map['amount'] = Variable<double>(amount.value);
+    }
+    if (method.present) {
+      map['method'] = Variable<String>(method.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (itemsJson.present) {
+      map['items_json'] = Variable<String>(itemsJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('PaymentsCompanion(')
+          ..write('id: $id, ')
+          ..write('remoteId: $remoteId, ')
+          ..write('orderId: $orderId, ')
+          ..write('amount: $amount, ')
+          ..write('method: $method, ')
+          ..write('status: $status, ')
+          ..write('itemsJson: $itemsJson, ')
+          ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
@@ -3695,6 +4502,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $RestaurantTablesTable restaurantTables = $RestaurantTablesTable(
     this,
   );
+  late final $PaymentsTable payments = $PaymentsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3708,12 +4516,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     printers,
     settings,
     restaurantTables,
+    payments,
   ];
 }
 
 typedef $$UsersTableCreateCompanionBuilder =
     UsersCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String?> fullName,
       Value<String?> username,
       Value<String?> pin,
@@ -3724,6 +4534,7 @@ typedef $$UsersTableCreateCompanionBuilder =
 typedef $$UsersTableUpdateCompanionBuilder =
     UsersCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String?> fullName,
       Value<String?> username,
       Value<String?> pin,
@@ -3766,6 +4577,11 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3839,6 +4655,11 @@ class $$UsersTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get fullName => $composableBuilder(
     column: $table.fullName,
     builder: (column) => ColumnOrderings(column),
@@ -3881,6 +4702,9 @@ class $$UsersTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
 
   GeneratedColumn<String> get fullName =>
       $composableBuilder(column: $table.fullName, builder: (column) => column);
@@ -3955,6 +4779,7 @@ class $$UsersTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String?> fullName = const Value.absent(),
                 Value<String?> username = const Value.absent(),
                 Value<String?> pin = const Value.absent(),
@@ -3963,6 +4788,7 @@ class $$UsersTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => UsersCompanion(
                 id: id,
+                remoteId: remoteId,
                 fullName: fullName,
                 username: username,
                 pin: pin,
@@ -3973,6 +4799,7 @@ class $$UsersTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String?> fullName = const Value.absent(),
                 Value<String?> username = const Value.absent(),
                 Value<String?> pin = const Value.absent(),
@@ -3981,6 +4808,7 @@ class $$UsersTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
               }) => UsersCompanion.insert(
                 id: id,
+                remoteId: remoteId,
                 fullName: fullName,
                 username: username,
                 pin: pin,
@@ -4038,6 +4866,7 @@ typedef $$UsersTableProcessedTableManager =
 typedef $$CategoriesTableCreateCompanionBuilder =
     CategoriesCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       required String name,
       Value<String> menuType,
       Value<int> sortOrder,
@@ -4047,6 +4876,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
 typedef $$CategoriesTableUpdateCompanionBuilder =
     CategoriesCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String> name,
       Value<String> menuType,
       Value<int> sortOrder,
@@ -4088,6 +4918,11 @@ class $$CategoriesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4156,6 +4991,11 @@ class $$CategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -4193,6 +5033,9 @@ class $$CategoriesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -4264,6 +5107,7 @@ class $$CategoriesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> menuType = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -4271,6 +5115,7 @@ class $$CategoriesTableTableManager
                 Value<String> status = const Value.absent(),
               }) => CategoriesCompanion(
                 id: id,
+                remoteId: remoteId,
                 name: name,
                 menuType: menuType,
                 sortOrder: sortOrder,
@@ -4280,6 +5125,7 @@ class $$CategoriesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 required String name,
                 Value<String> menuType = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
@@ -4287,6 +5133,7 @@ class $$CategoriesTableTableManager
                 Value<String> status = const Value.absent(),
               }) => CategoriesCompanion.insert(
                 id: id,
+                remoteId: remoteId,
                 name: name,
                 menuType: menuType,
                 sortOrder: sortOrder,
@@ -4352,6 +5199,7 @@ typedef $$CategoriesTableProcessedTableManager =
 typedef $$MenuItemsTableCreateCompanionBuilder =
     MenuItemsCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String?> code,
       required String name,
       required double price,
@@ -4364,6 +5212,7 @@ typedef $$MenuItemsTableCreateCompanionBuilder =
 typedef $$MenuItemsTableUpdateCompanionBuilder =
     MenuItemsCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String?> code,
       Value<String> name,
       Value<double> price,
@@ -4427,6 +5276,11 @@ class $$MenuItemsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4528,6 +5382,11 @@ class $$MenuItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get code => $composableBuilder(
     column: $table.code,
     builder: (column) => ColumnOrderings(column),
@@ -4598,6 +5457,9 @@ class $$MenuItemsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
 
   GeneratedColumn<String> get code =>
       $composableBuilder(column: $table.code, builder: (column) => column);
@@ -4700,6 +5562,7 @@ class $$MenuItemsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String?> code = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<double> price = const Value.absent(),
@@ -4710,6 +5573,7 @@ class $$MenuItemsTableTableManager
                 Value<bool> allowPriceEdit = const Value.absent(),
               }) => MenuItemsCompanion(
                 id: id,
+                remoteId: remoteId,
                 code: code,
                 name: name,
                 price: price,
@@ -4722,6 +5586,7 @@ class $$MenuItemsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String?> code = const Value.absent(),
                 required String name,
                 required double price,
@@ -4732,6 +5597,7 @@ class $$MenuItemsTableTableManager
                 Value<bool> allowPriceEdit = const Value.absent(),
               }) => MenuItemsCompanion.insert(
                 id: id,
+                remoteId: remoteId,
                 code: code,
                 name: name,
                 price: price,
@@ -4834,6 +5700,7 @@ typedef $$MenuItemsTableProcessedTableManager =
 typedef $$OrdersTableCreateCompanionBuilder =
     OrdersCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       required String orderNumber,
       Value<String?> tableNumber,
       Value<String> type,
@@ -4851,6 +5718,7 @@ typedef $$OrdersTableCreateCompanionBuilder =
 typedef $$OrdersTableUpdateCompanionBuilder =
     OrdersCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String> orderNumber,
       Value<String?> tableNumber,
       Value<String> type,
@@ -4905,6 +5773,25 @@ final class $$OrdersTableReferences
       manager.$state.copyWith(prefetchedData: cache),
     );
   }
+
+  static MultiTypedResultKey<$PaymentsTable, List<Payment>> _paymentsRefsTable(
+    _$AppDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.payments,
+    aliasName: $_aliasNameGenerator(db.orders.id, db.payments.orderId),
+  );
+
+  $$PaymentsTableProcessedTableManager get paymentsRefs {
+    final manager = $$PaymentsTableTableManager(
+      $_db,
+      $_db.payments,
+    ).filter((f) => f.orderId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_paymentsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 }
 
 class $$OrdersTableFilterComposer
@@ -4918,6 +5805,11 @@ class $$OrdersTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5028,6 +5920,31 @@ class $$OrdersTableFilterComposer
     );
     return f(composer);
   }
+
+  Expression<bool> paymentsRefs(
+    Expression<bool> Function($$PaymentsTableFilterComposer f) f,
+  ) {
+    final $$PaymentsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.payments,
+      getReferencedColumn: (t) => t.orderId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PaymentsTableFilterComposer(
+            $db: $db,
+            $table: $db.payments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$OrdersTableOrderingComposer
@@ -5041,6 +5958,11 @@ class $$OrdersTableOrderingComposer
   });
   ColumnOrderings<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5140,6 +6062,9 @@ class $$OrdersTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
+
   GeneratedColumn<String> get orderNumber => $composableBuilder(
     column: $table.orderNumber,
     builder: (column) => column,
@@ -5235,6 +6160,31 @@ class $$OrdersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> paymentsRefs<T extends Object>(
+    Expression<T> Function($$PaymentsTableAnnotationComposer a) f,
+  ) {
+    final $$PaymentsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.payments,
+      getReferencedColumn: (t) => t.orderId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$PaymentsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.payments,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$OrdersTableTableManager
@@ -5250,7 +6200,11 @@ class $$OrdersTableTableManager
           $$OrdersTableUpdateCompanionBuilder,
           (Order, $$OrdersTableReferences),
           Order,
-          PrefetchHooks Function({bool waiterId, bool orderItemsRefs})
+          PrefetchHooks Function({
+            bool waiterId,
+            bool orderItemsRefs,
+            bool paymentsRefs,
+          })
         > {
   $$OrdersTableTableManager(_$AppDatabase db, $OrdersTable table)
     : super(
@@ -5266,6 +6220,7 @@ class $$OrdersTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String> orderNumber = const Value.absent(),
                 Value<String?> tableNumber = const Value.absent(),
                 Value<String> type = const Value.absent(),
@@ -5281,6 +6236,7 @@ class $$OrdersTableTableManager
                 Value<DateTime?> completedAt = const Value.absent(),
               }) => OrdersCompanion(
                 id: id,
+                remoteId: remoteId,
                 orderNumber: orderNumber,
                 tableNumber: tableNumber,
                 type: type,
@@ -5298,6 +6254,7 @@ class $$OrdersTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 required String orderNumber,
                 Value<String?> tableNumber = const Value.absent(),
                 Value<String> type = const Value.absent(),
@@ -5313,6 +6270,7 @@ class $$OrdersTableTableManager
                 Value<DateTime?> completedAt = const Value.absent(),
               }) => OrdersCompanion.insert(
                 id: id,
+                remoteId: remoteId,
                 orderNumber: orderNumber,
                 tableNumber: tableNumber,
                 type: type,
@@ -5333,59 +6291,94 @@ class $$OrdersTableTableManager
                     (e.readTable(table), $$OrdersTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({waiterId = false, orderItemsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (orderItemsRefs) db.orderItems],
-              addJoins:
-                  <
-                    T extends TableManagerState<
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic,
-                      dynamic
-                    >
-                  >(state) {
-                    if (waiterId) {
-                      state =
-                          state.withJoin(
-                                currentTable: table,
-                                currentColumn: table.waiterId,
-                                referencedTable: $$OrdersTableReferences
-                                    ._waiterIdTable(db),
-                                referencedColumn: $$OrdersTableReferences
-                                    ._waiterIdTable(db)
-                                    .id,
-                              )
-                              as T;
-                    }
+          prefetchHooksCallback:
+              ({
+                waiterId = false,
+                orderItemsRefs = false,
+                paymentsRefs = false,
+              }) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (orderItemsRefs) db.orderItems,
+                    if (paymentsRefs) db.payments,
+                  ],
+                  addJoins:
+                      <
+                        T extends TableManagerState<
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic,
+                          dynamic
+                        >
+                      >(state) {
+                        if (waiterId) {
+                          state =
+                              state.withJoin(
+                                    currentTable: table,
+                                    currentColumn: table.waiterId,
+                                    referencedTable: $$OrdersTableReferences
+                                        ._waiterIdTable(db),
+                                    referencedColumn: $$OrdersTableReferences
+                                        ._waiterIdTable(db)
+                                        .id,
+                                  )
+                                  as T;
+                        }
 
-                    return state;
+                        return state;
+                      },
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (orderItemsRefs)
+                        await $_getPrefetchedData<
+                          Order,
+                          $OrdersTable,
+                          OrderItem
+                        >(
+                          currentTable: table,
+                          referencedTable: $$OrdersTableReferences
+                              ._orderItemsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$OrdersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).orderItemsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.orderId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (paymentsRefs)
+                        await $_getPrefetchedData<Order, $OrdersTable, Payment>(
+                          currentTable: table,
+                          referencedTable: $$OrdersTableReferences
+                              ._paymentsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$OrdersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).paymentsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.orderId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
                   },
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (orderItemsRefs)
-                    await $_getPrefetchedData<Order, $OrdersTable, OrderItem>(
-                      currentTable: table,
-                      referencedTable: $$OrdersTableReferences
-                          ._orderItemsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$OrdersTableReferences(db, table, p0).orderItemsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.orderId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -5402,12 +6395,17 @@ typedef $$OrdersTableProcessedTableManager =
       $$OrdersTableUpdateCompanionBuilder,
       (Order, $$OrdersTableReferences),
       Order,
-      PrefetchHooks Function({bool waiterId, bool orderItemsRefs})
+      PrefetchHooks Function({
+        bool waiterId,
+        bool orderItemsRefs,
+        bool paymentsRefs,
+      })
     >;
 typedef $$OrderItemsTableCreateCompanionBuilder =
     OrderItemsCompanion Function({
       Value<int> id,
       required int orderId,
+      Value<String?> remoteId,
       required int menuItemId,
       Value<int> quantity,
       required double priceAtTime,
@@ -5417,6 +6415,7 @@ typedef $$OrderItemsTableUpdateCompanionBuilder =
     OrderItemsCompanion Function({
       Value<int> id,
       Value<int> orderId,
+      Value<String?> remoteId,
       Value<int> menuItemId,
       Value<int> quantity,
       Value<double> priceAtTime,
@@ -5476,6 +6475,11 @@ class $$OrderItemsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -5555,6 +6559,11 @@ class $$OrderItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get quantity => $composableBuilder(
     column: $table.quantity,
     builder: (column) => ColumnOrderings(column),
@@ -5628,6 +6637,9 @@ class $$OrderItemsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
 
   GeneratedColumn<int> get quantity =>
       $composableBuilder(column: $table.quantity, builder: (column) => column);
@@ -5717,6 +6729,7 @@ class $$OrderItemsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 Value<int> orderId = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<int> menuItemId = const Value.absent(),
                 Value<int> quantity = const Value.absent(),
                 Value<double> priceAtTime = const Value.absent(),
@@ -5724,6 +6737,7 @@ class $$OrderItemsTableTableManager
               }) => OrderItemsCompanion(
                 id: id,
                 orderId: orderId,
+                remoteId: remoteId,
                 menuItemId: menuItemId,
                 quantity: quantity,
                 priceAtTime: priceAtTime,
@@ -5733,6 +6747,7 @@ class $$OrderItemsTableTableManager
               ({
                 Value<int> id = const Value.absent(),
                 required int orderId,
+                Value<String?> remoteId = const Value.absent(),
                 required int menuItemId,
                 Value<int> quantity = const Value.absent(),
                 required double priceAtTime,
@@ -5740,6 +6755,7 @@ class $$OrderItemsTableTableManager
               }) => OrderItemsCompanion.insert(
                 id: id,
                 orderId: orderId,
+                remoteId: remoteId,
                 menuItemId: menuItemId,
                 quantity: quantity,
                 priceAtTime: priceAtTime,
@@ -6237,6 +7253,7 @@ typedef $$SettingsTableProcessedTableManager =
 typedef $$RestaurantTablesTableCreateCompanionBuilder =
     RestaurantTablesCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       required String name,
       Value<String> status,
       Value<int> x,
@@ -6245,6 +7262,7 @@ typedef $$RestaurantTablesTableCreateCompanionBuilder =
 typedef $$RestaurantTablesTableUpdateCompanionBuilder =
     RestaurantTablesCompanion Function({
       Value<int> id,
+      Value<String?> remoteId,
       Value<String> name,
       Value<String> status,
       Value<int> x,
@@ -6262,6 +7280,11 @@ class $$RestaurantTablesTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6300,6 +7323,11 @@ class $$RestaurantTablesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get name => $composableBuilder(
     column: $table.name,
     builder: (column) => ColumnOrderings(column),
@@ -6332,6 +7360,9 @@ class $$RestaurantTablesTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
@@ -6384,12 +7415,14 @@ class $$RestaurantTablesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<int> x = const Value.absent(),
                 Value<int> y = const Value.absent(),
               }) => RestaurantTablesCompanion(
                 id: id,
+                remoteId: remoteId,
                 name: name,
                 status: status,
                 x: x,
@@ -6398,12 +7431,14 @@ class $$RestaurantTablesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
                 required String name,
                 Value<String> status = const Value.absent(),
                 Value<int> x = const Value.absent(),
                 Value<int> y = const Value.absent(),
               }) => RestaurantTablesCompanion.insert(
                 id: id,
+                remoteId: remoteId,
                 name: name,
                 status: status,
                 x: x,
@@ -6434,6 +7469,375 @@ typedef $$RestaurantTablesTableProcessedTableManager =
       RestaurantTable,
       PrefetchHooks Function()
     >;
+typedef $$PaymentsTableCreateCompanionBuilder =
+    PaymentsCompanion Function({
+      Value<int> id,
+      Value<String?> remoteId,
+      required int orderId,
+      required double amount,
+      required String method,
+      Value<String> status,
+      Value<String?> itemsJson,
+      Value<DateTime> createdAt,
+    });
+typedef $$PaymentsTableUpdateCompanionBuilder =
+    PaymentsCompanion Function({
+      Value<int> id,
+      Value<String?> remoteId,
+      Value<int> orderId,
+      Value<double> amount,
+      Value<String> method,
+      Value<String> status,
+      Value<String?> itemsJson,
+      Value<DateTime> createdAt,
+    });
+
+final class $$PaymentsTableReferences
+    extends BaseReferences<_$AppDatabase, $PaymentsTable, Payment> {
+  $$PaymentsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $OrdersTable _orderIdTable(_$AppDatabase db) => db.orders.createAlias(
+    $_aliasNameGenerator(db.payments.orderId, db.orders.id),
+  );
+
+  $$OrdersTableProcessedTableManager get orderId {
+    final $_column = $_itemColumn<int>('order_id')!;
+
+    final manager = $$OrdersTableTableManager(
+      $_db,
+      $_db.orders,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_orderIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$PaymentsTableFilterComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get method => $composableBuilder(
+    column: $table.method,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get itemsJson => $composableBuilder(
+    column: $table.itemsJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$OrdersTableFilterComposer get orderId {
+    final $$OrdersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.orderId,
+      referencedTable: $db.orders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OrdersTableFilterComposer(
+            $db: $db,
+            $table: $db.orders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PaymentsTableOrderingComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get remoteId => $composableBuilder(
+    column: $table.remoteId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get amount => $composableBuilder(
+    column: $table.amount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get method => $composableBuilder(
+    column: $table.method,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get itemsJson => $composableBuilder(
+    column: $table.itemsJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$OrdersTableOrderingComposer get orderId {
+    final $$OrdersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.orderId,
+      referencedTable: $db.orders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OrdersTableOrderingComposer(
+            $db: $db,
+            $table: $db.orders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PaymentsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $PaymentsTable> {
+  $$PaymentsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get remoteId =>
+      $composableBuilder(column: $table.remoteId, builder: (column) => column);
+
+  GeneratedColumn<double> get amount =>
+      $composableBuilder(column: $table.amount, builder: (column) => column);
+
+  GeneratedColumn<String> get method =>
+      $composableBuilder(column: $table.method, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get itemsJson =>
+      $composableBuilder(column: $table.itemsJson, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$OrdersTableAnnotationComposer get orderId {
+    final $$OrdersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.orderId,
+      referencedTable: $db.orders,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$OrdersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.orders,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$PaymentsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $PaymentsTable,
+          Payment,
+          $$PaymentsTableFilterComposer,
+          $$PaymentsTableOrderingComposer,
+          $$PaymentsTableAnnotationComposer,
+          $$PaymentsTableCreateCompanionBuilder,
+          $$PaymentsTableUpdateCompanionBuilder,
+          (Payment, $$PaymentsTableReferences),
+          Payment,
+          PrefetchHooks Function({bool orderId})
+        > {
+  $$PaymentsTableTableManager(_$AppDatabase db, $PaymentsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$PaymentsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$PaymentsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$PaymentsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
+                Value<int> orderId = const Value.absent(),
+                Value<double> amount = const Value.absent(),
+                Value<String> method = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String?> itemsJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => PaymentsCompanion(
+                id: id,
+                remoteId: remoteId,
+                orderId: orderId,
+                amount: amount,
+                method: method,
+                status: status,
+                itemsJson: itemsJson,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String?> remoteId = const Value.absent(),
+                required int orderId,
+                required double amount,
+                required String method,
+                Value<String> status = const Value.absent(),
+                Value<String?> itemsJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => PaymentsCompanion.insert(
+                id: id,
+                remoteId: remoteId,
+                orderId: orderId,
+                amount: amount,
+                method: method,
+                status: status,
+                itemsJson: itemsJson,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$PaymentsTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({orderId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (orderId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.orderId,
+                                referencedTable: $$PaymentsTableReferences
+                                    ._orderIdTable(db),
+                                referencedColumn: $$PaymentsTableReferences
+                                    ._orderIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$PaymentsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $PaymentsTable,
+      Payment,
+      $$PaymentsTableFilterComposer,
+      $$PaymentsTableOrderingComposer,
+      $$PaymentsTableAnnotationComposer,
+      $$PaymentsTableCreateCompanionBuilder,
+      $$PaymentsTableUpdateCompanionBuilder,
+      (Payment, $$PaymentsTableReferences),
+      Payment,
+      PrefetchHooks Function({bool orderId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -6454,4 +7858,6 @@ class $AppDatabaseManager {
       $$SettingsTableTableManager(_db, _db.settings);
   $$RestaurantTablesTableTableManager get restaurantTables =>
       $$RestaurantTablesTableTableManager(_db, _db.restaurantTables);
+  $$PaymentsTableTableManager get payments =>
+      $$PaymentsTableTableManager(_db, _db.payments);
 }
