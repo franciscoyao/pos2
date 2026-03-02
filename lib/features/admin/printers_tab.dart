@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/printer_repository.dart';
 import 'package:pos_system/core/services/printer_service.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:printing/printing.dart' as pw;
+
+final printersProvider = FutureProvider<List<PrinterModel>>((ref) async {
+  return await ref.watch(printerRepositoryProvider).getPrinters();
+});
 
 class PrintersTab extends ConsumerStatefulWidget {
   const PrintersTab({super.key});
@@ -14,8 +17,6 @@ class PrintersTab extends ConsumerStatefulWidget {
 }
 
 class _PrintersTabState extends ConsumerState<PrintersTab> {
-  // We don't need local state for devices anymore, we listen to the stream
-
   void _startScan() {
     ref.read(printerServiceProvider).startScan();
   }
@@ -26,9 +27,7 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
 
   @override
   Widget build(BuildContext context) {
-    final savedPrintersStream = ref
-        .watch(printerRepositoryProvider)
-        .watchAllPrinters();
+    final savedPrintersAsync = ref.watch(printersProvider);
     final printerService = ref.watch(printerServiceProvider);
 
     return Row(
@@ -48,17 +47,8 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                 ),
                 const Divider(),
                 Expanded(
-                  child: StreamBuilder<List<Printer>>(
-                    stream: savedPrintersStream,
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Center(child: Text('Error: ${snapshot.error}'));
-                      }
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final printers = snapshot.data!;
+                  child: savedPrintersAsync.when(
+                    data: (printers) {
                       if (printers.isEmpty) {
                         return const Center(child: Text('No printers saved'));
                       }
@@ -79,7 +69,6 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                                 IconButton(
                                   icon: const Icon(Icons.print_outlined),
                                   onPressed: () async {
-                                    // Attempt to connect and print
                                     try {
                                       ScaffoldMessenger.of(
                                         context,
@@ -119,10 +108,11 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                                     Icons.delete,
                                     color: Colors.red,
                                   ),
-                                  onPressed: () {
-                                    ref
+                                  onPressed: () async {
+                                    await ref
                                         .read(printerRepositoryProvider)
                                         .deletePrinter(printer.id);
+                                    ref.invalidate(printersProvider);
                                   },
                                 ),
                               ],
@@ -131,6 +121,9 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                         },
                       );
                     },
+                    loading: () =>
+                        const Center(child: CircularProgressIndicator()),
+                    error: (err, stack) => Center(child: Text('Error: $err')),
                   ),
                 ),
               ],
@@ -225,17 +218,16 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                                     title: Text(printer.name),
                                     subtitle: Text(printer.url),
                                     trailing: ElevatedButton(
-                                      onPressed: () {
-                                        ref
+                                      onPressed: () async {
+                                        await ref
                                             .read(printerRepositoryProvider)
                                             .addPrinter(
-                                              PrintersCompanion.insert(
-                                                name: printer.name,
-                                                macAddress:
-                                                    'SYSTEM:${printer.name}',
-                                                role: 'receipt',
-                                              ),
+                                              name: printer.name,
+                                              macAddress:
+                                                  'SYSTEM:${printer.name}',
+                                              role: 'receipt',
                                             );
+                                        ref.invalidate(printersProvider);
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(
                                             context,
@@ -270,16 +262,15 @@ class _PrintersTabState extends ConsumerState<PrintersTab> {
                                   return _DeviceListItem(
                                     name: device.platformName,
                                     mac: device.remoteId.str,
-                                    onAdd: (name, mac, roles) {
-                                      ref
+                                    onAdd: (name, mac, roles) async {
+                                      await ref
                                           .read(printerRepositoryProvider)
                                           .addPrinter(
-                                            PrintersCompanion.insert(
-                                              name: name,
-                                              macAddress: mac,
-                                              role: roles.join(','),
-                                            ),
+                                            name: name,
+                                            macAddress: mac,
+                                            role: roles.join(','),
                                           );
+                                      ref.invalidate(printersProvider);
                                       if (context.mounted) {
                                         ScaffoldMessenger.of(
                                           context,

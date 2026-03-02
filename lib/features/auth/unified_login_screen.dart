@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_system/core/theme/app_colors.dart';
 import 'package:pos_system/data/repositories/auth_repository.dart';
+import 'package:pos_system/features/bar/bar_screen.dart';
 import 'package:pos_system/features/dashboard/admin_dashboard.dart';
 import 'package:pos_system/features/dashboard/waiter_dashboard.dart';
+import 'package:pos_system/features/kitchen/kitchen_screen.dart';
+import 'package:pos_system/features/kiosk/presentation/kiosk_screen.dart';
 
 class UnifiedLoginScreen extends ConsumerStatefulWidget {
   const UnifiedLoginScreen({super.key});
@@ -13,74 +16,62 @@ class UnifiedLoginScreen extends ConsumerStatefulWidget {
 }
 
 class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
-  String _selectedRole = 'admin';
-  final _usernameController = TextEditingController();
-  final _pinController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
-
-  final List<Map<String, dynamic>> _roles = [
-    {
-      'id': 'admin',
-      'label': 'Admin',
-      'icon': Icons.admin_panel_settings_outlined,
-    },
-    {'id': 'waiter', 'label': 'Waiter', 'icon': Icons.restaurant_menu},
-    {'id': 'kitchen', 'label': 'Kitchen', 'icon': Icons.kitchen},
-    {'id': 'bar', 'label': 'Bar', 'icon': Icons.local_bar},
-    {'id': 'kiosk', 'label': 'Kiosk', 'icon': Icons.monitor},
-  ];
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _pinController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   void _handleLogin() async {
-    final isQuickAccess = ['kitchen', 'bar', 'kiosk'].contains(_selectedRole);
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-    if (!isQuickAccess) {
-      if (_usernameController.text.isEmpty) {
-        _showError('Username is required');
-        return;
-      }
-      if (_pinController.text.isEmpty) {
-        _showError('PIN is required');
-        return;
-      }
+    if (email.isEmpty) {
+      _showError('Email is required');
+      return;
+    }
+    if (password.isEmpty) {
+      _showError('Password is required');
+      return;
     }
 
     setState(() => _isLoading = true);
 
     try {
+      // Simulate network delay for better UX
       await Future.delayed(const Duration(milliseconds: 500));
-
-      if (isQuickAccess) {
-        if (mounted) _navigateBasedOnRole(_selectedRole);
-        return;
-      }
 
       final user = await ref
           .read(authRepositoryProvider)
-          .login(_usernameController.text.trim(), _pinController.text.trim());
+          .login(email, password);
 
       if (!mounted) return;
       setState(() => _isLoading = false);
 
       if (user != null) {
-        if (user.role == _selectedRole) {
-          _navigateBasedOnRole(user.role);
-        } else {
-          _showError('User is not authorized for $_selectedRole role');
-        }
+        _navigateBasedOnRole(user.role);
       } else {
-        _showError('Invalid credentials');
+        _showError('Invalid email or password');
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      _showError('Error: $e');
+      // Clean up error message if it's from PB SDK
+      String msg = e.toString();
+      if (msg.contains('ClientException')) {
+        // Simple parsing or just show a friendly message
+        if (msg.contains('400')) {
+          msg = 'Invalid email or password';
+        } else {
+          msg = 'Network error. Please try again.';
+        }
+      }
+      _showError(msg);
     }
   }
 
@@ -93,11 +84,19 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
       case 'waiter':
         destination = const WaiterDashboard();
         break;
+      case 'kitchen':
+        destination = const KitchenScreen();
+        break;
+      case 'bar':
+        destination = const BarScreen();
+        break;
+      case 'kiosk':
+        destination = const KioskScreen();
+        break;
       default:
-        destination = Scaffold(
-          appBar: AppBar(title: Text('${role.toUpperCase()} Interface')),
-          body: Center(child: Text('Welcome to $role interface')),
-        );
+        // Fallback or error if role is unknown
+        _showError('Unknown role: $role');
+        return;
     }
 
     Navigator.of(
@@ -117,15 +116,13 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isQuickAccess = ['kitchen', 'bar', 'kiosk'].contains(_selectedRole);
-
     return Scaffold(
       backgroundColor: AppColors.loginDark,
       body: Stack(
         children: [
           // Gradient Background
           Container(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -142,7 +139,7 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 500),
+                constraints: const BoxConstraints(maxWidth: 400),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -173,7 +170,7 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            'Select your role to continue',
+                            'Sign in to continue',
                             style: TextStyle(
                               fontSize: 14,
                               color: AppColors.textSecondary,
@@ -181,183 +178,98 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
                           ),
                           const SizedBox(height: 32),
 
-                          // Role Tabs
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: _roles.map((role) {
-                                  final isSelected =
-                                      _selectedRole == role['id'];
-                                  return GestureDetector(
-                                    onTap: () {
-                                      setState(() {
-                                        _selectedRole = role['id'];
-                                      });
-                                    },
-                                    child: AnimatedContainer(
-                                      duration: const Duration(
-                                        milliseconds: 200,
-                                      ),
-                                      width: 80,
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 8,
-                                      ),
-                                      margin: const EdgeInsets.symmetric(
-                                        horizontal: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : Colors.transparent,
-                                        borderRadius: BorderRadius.circular(8),
-                                        boxShadow: isSelected
-                                            ? [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withValues(alpha: 0.05),
-                                                  blurRadius: 4,
-                                                  spreadRadius: 1,
-                                                ),
-                                              ]
-                                            : null,
-                                      ),
-                                      child: Column(
-                                        children: [
-                                          Icon(
-                                            role['icon'],
-                                            size: 20,
-                                            color: isSelected
-                                                ? AppColors.textPrimary
-                                                : AppColors.textTertiary,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            role['label'],
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: 10,
-                                              fontWeight: isSelected
-                                                  ? FontWeight.w600
-                                                  : FontWeight.w500,
-                                              color: isSelected
-                                                  ? AppColors.textPrimary
-                                                  : AppColors.textTertiary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
+                          // Email Field
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: const Text(
+                              'Email',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                           ),
-
-                          const SizedBox(height: 32),
-
-                          // Role Icon
-                          Icon(
-                            _roles.firstWhere(
-                              (r) => r['id'] == _selectedRole,
-                            )['icon'],
-                            size: 48,
-                            color: AppColors.textPrimary,
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                            ),
+                            cursorColor: AppColors.textPrimary,
+                            decoration: InputDecoration(
+                              hintText: 'Enter your email',
+                              hintStyle: const TextStyle(
+                                color: AppColors.textTertiary,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.email_outlined,
+                                color: AppColors.textTertiary,
+                                size: 20,
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
                           ),
+                          const SizedBox(height: 16),
 
+                          // Password Field
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: const Text(
+                              'Password',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                            ),
+                            cursorColor: AppColors.textPrimary,
+                            decoration: InputDecoration(
+                              hintText: 'Enter your password',
+                              hintStyle: const TextStyle(
+                                color: AppColors.textTertiary,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: AppColors.textTertiary,
+                                size: 20,
+                              ),
+                              filled: true,
+                              fillColor: AppColors.surface,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide.none,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 32),
-
-                          // Form Fields
-                          if (!isQuickAccess) ...[
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Username',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _usernameController,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                              ),
-                              cursorColor: AppColors.textPrimary,
-                              decoration: InputDecoration(
-                                hintText: 'Enter username',
-                                hintStyle: TextStyle(
-                                  color: AppColors.textTertiary,
-                                ),
-                                filled: true,
-                                fillColor: AppColors.surface,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'PIN',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _pinController,
-                              obscureText: true,
-                              keyboardType: TextInputType.number,
-                              maxLength: 4,
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                              ),
-                              cursorColor: AppColors.textPrimary,
-                              decoration: InputDecoration(
-                                hintText: '4-digit PIN',
-                                hintStyle: TextStyle(
-                                  color: AppColors.textTertiary,
-                                ),
-                                filled: true,
-                                fillColor: AppColors.surface,
-                                counterText: '',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide.none,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 32),
-                          ],
 
                           // Login Button
                           SizedBox(
                             width: double.infinity,
-                            height: 56,
+                            height: 50,
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleLogin,
                               style: ElevatedButton.styleFrom(
@@ -377,11 +289,9 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
                                         strokeWidth: 2,
                                       ),
                                     )
-                                  : Text(
-                                      isQuickAccess
-                                          ? 'Enter ${_roles.firstWhere((r) => r['id'] == _selectedRole)['label']} Mode'
-                                          : 'Login as ${_roles.firstWhere((r) => r['id'] == _selectedRole)['label']}',
-                                      style: const TextStyle(
+                                  : const Text(
+                                      'Login',
+                                      style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
                                       ),
@@ -391,33 +301,18 @@ class _UnifiedLoginScreenState extends ConsumerState<UnifiedLoginScreen> {
 
                           const SizedBox(height: 16),
 
-                          if (!isQuickAccess)
-                            const Text(
-                              'Default: admin / 1111',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textTertiary,
-                              ),
+                          const Text(
+                            'Default: admin@pos.local / 12345678',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textTertiary,
                             ),
+                          ),
                         ],
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-
-          // Help Button
-          Positioned(
-            bottom: 24,
-            right: 24,
-            child: FloatingActionButton(
-              onPressed: () {},
-              backgroundColor: AppColors.textPrimary,
-              child: const Icon(
-                Icons.question_mark_rounded,
-                color: Colors.white,
               ),
             ),
           ),

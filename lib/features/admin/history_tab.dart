@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
 
 class AdminHistoryTab extends ConsumerStatefulWidget {
@@ -25,9 +24,7 @@ class _AdminHistoryTabState extends ConsumerState<AdminHistoryTab> {
   @override
   Widget build(BuildContext context) {
     // Only paid orders
-    final paidOrdersStream = ref
-        .watch(orderRepositoryProvider)
-        .watchPaidOrders();
+    final paidOrdersFuture = ref.watch(orderRepositoryProvider).getPaidOrders();
 
     return Column(
       children: [
@@ -73,8 +70,8 @@ class _AdminHistoryTabState extends ConsumerState<AdminHistoryTab> {
 
         // Orders Table
         Expanded(
-          child: StreamBuilder<List<Order>>(
-            stream: paidOrdersStream,
+          child: FutureBuilder<List<OrderModel>>(
+            future: paidOrdersFuture,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text('Error: ${snapshot.error}'));
@@ -91,10 +88,8 @@ class _AdminHistoryTabState extends ConsumerState<AdminHistoryTab> {
                 final matchesSearch =
                     search.isEmpty ||
                     order.orderNumber.toLowerCase().contains(search) ||
-                    (order.tableNumber?.toLowerCase().contains(search) ??
-                        false) ||
-                    (order.taxNumber?.toLowerCase().contains(search) ?? false);
-                // Waiter check requires join, we'll skip strictly matching waiter name for now or assume ID matches
+                    order.tableNumber.toLowerCase().contains(search) ||
+                    order.taxNumber.toLowerCase().contains(search);
 
                 final matchesPayment =
                     _paymentFilter == 'All Payments' ||
@@ -137,10 +132,10 @@ class _AdminHistoryTabState extends ConsumerState<AdminHistoryTab> {
                             ),
                           ),
                           DataCell(Text(order.type)),
-                          DataCell(Text(order.tableNumber ?? '-')),
-                          DataCell(Text('ID: ${order.waiterId}')),
-                          DataCell(Text(order.paymentMethod ?? '-')),
-                          DataCell(Text(order.taxNumber ?? '-')),
+                          DataCell(Text(order.tableNumber)),
+                          DataCell(Text('ID: ${order.waiterId ?? "-"}')),
+                          DataCell(Text(order.paymentMethod)),
+                          DataCell(Text(order.taxNumber)),
                           DataCell(
                             Text('\$${order.totalAmount.toStringAsFixed(2)}'),
                           ),

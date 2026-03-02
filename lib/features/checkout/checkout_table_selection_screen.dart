@@ -9,12 +9,12 @@ class CheckoutTableSelectionScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Reuse the logic to get active orders
-    final activeOrdersStream = ref
+    final activeOrdersFuture = ref
         .watch(orderRepositoryProvider)
-        .watchActiveOrders();
+        .getActiveOrders();
 
-    return StreamBuilder(
-      stream: activeOrdersStream,
+    return FutureBuilder<List<OrderModel>>(
+      future: activeOrdersFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -25,12 +25,12 @@ class CheckoutTableSelectionScreen extends ConsumerWidget {
 
         final orders = snapshot.data!;
         // Group orders by table
-        final Map<String, List<dynamic>> tableData = {};
+        final Map<String, List<OrderModel>> tableData = {};
 
         for (var order in orders) {
-          if (order.tableNumber != null && order.status != 'paid') {
+          if (order.status != 'paid') {
             if (!tableData.containsKey(order.tableNumber)) {
-              tableData[order.tableNumber!] = [];
+              tableData[order.tableNumber] = [];
             }
             tableData[order.tableNumber]!.add(order);
           }

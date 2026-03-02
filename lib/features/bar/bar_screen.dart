@@ -16,9 +16,9 @@ class _BarScreenState extends ConsumerState<BarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stream = _barOnly
-        ? ref.watch(orderRepositoryProvider).watchOrdersByStation('bar')
-        : ref.watch(orderRepositoryProvider).watchAllActiveOrdersWithItems();
+    final future = _barOnly
+        ? ref.watch(orderRepositoryProvider).getOrdersByStation('bar')
+        : ref.watch(orderRepositoryProvider).getActiveTables();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -30,8 +30,8 @@ class _BarScreenState extends ConsumerState<BarScreen> {
               'Bar Orders',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            StreamBuilder(
-              stream: stream,
+            FutureBuilder<List<OrderWithDetails>>(
+              future: future,
               builder: (context, snapshot) {
                 final count = snapshot.data?.length ?? 0;
                 return Text(
@@ -78,8 +78,8 @@ class _BarScreenState extends ConsumerState<BarScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<OrderWithDetails>>(
-        stream: stream,
+      body: FutureBuilder<List<OrderWithDetails>>(
+        future: future,
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));

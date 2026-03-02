@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:pos_system/data/database/database.dart';
+import 'package:pos_system/data/repositories/menu_repository.dart';
 
 class KioskCategorySidebar extends StatelessWidget {
-  final List<Category> categories;
-  final int? selectedCategoryId;
-  final ValueChanged<int> onCategorySelected;
+  final List<CategoryModel> categories;
+  final String? selectedCategoryId;
+  final ValueChanged<String> onCategorySelected;
 
   const KioskCategorySidebar({
     super.key,

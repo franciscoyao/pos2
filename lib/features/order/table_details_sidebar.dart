@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_system/core/theme/app_colors.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
+import 'package:pos_system/data/repositories/table_repository.dart';
 import 'package:pos_system/features/checkout/checkout_screen.dart';
 import 'package:pos_system/features/order/cart_provider.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 
 class TableDetailsSidebar extends ConsumerWidget {
-  final RestaurantTable table;
+  final RestaurantTableModel table;
 
   const TableDetailsSidebar({super.key, required this.table});
 
@@ -333,8 +333,8 @@ class TableDetailsSidebar extends ConsumerWidget {
                               (p) => p.role.contains('receipt'),
                               orElse: () => savedPrinters.firstWhere(
                                 (p) => p.role.isEmpty,
-                                orElse: () => const Printer(
-                                  id: -1,
+                                orElse: () => PrinterModel(
+                                  id: '',
                                   name: '',
                                   macAddress: '',
                                   role: '',
@@ -343,7 +343,7 @@ class TableDetailsSidebar extends ConsumerWidget {
                               ),
                             );
 
-                            if (receiptPrinter.id == -1) {
+                            if (receiptPrinter.id.isEmpty) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
@@ -499,7 +499,7 @@ class TableDetailsSidebar extends ConsumerWidget {
   }
 
   Future<List<int>> _generatePdfReceipt(
-    RestaurantTable table,
+    RestaurantTableModel table,
     List<OrderWithDetails> orders,
   ) async {
     final pdf = pw.Document();
@@ -575,7 +575,7 @@ class TableDetailsSidebar extends ConsumerWidget {
   }
 
   Future<List<int>> _generateEscPosReceipt(
-    RestaurantTable table,
+    RestaurantTableModel table,
     List<OrderWithDetails> orders,
   ) async {
     final profile = await CapabilityProfile.load();
@@ -632,7 +632,7 @@ class TableDetailsSidebar extends ConsumerWidget {
   void _showMergeDialog(
     BuildContext context,
     WidgetRef ref,
-    RestaurantTable currentTable,
+    RestaurantTableModel currentTable,
   ) {
     final TextEditingController tableController = TextEditingController();
     showDialog(
@@ -684,10 +684,10 @@ class TableDetailsSidebar extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     List<OrderWithDetails> orders,
-    RestaurantTable currentTable,
+    RestaurantTableModel currentTable,
   ) {
     // Split selection state
-    final selectedItems = <int, int>{}; // itemId -> quantity
+    final selectedItems = <String, int>{}; // itemId -> quantity
     final TextEditingController tableController = TextEditingController();
 
     showDialog(
@@ -797,17 +797,14 @@ class TableDetailsSidebar extends ConsumerWidget {
                     selectedItems.isNotEmpty) {
                   try {
                     // Group by order
-                    final grouped = <int, List<Map<String, dynamic>>>{};
+                    final grouped = <String, List<String>>{};
                     for (var o in orders) {
                       for (var i in o.items) {
                         if (selectedItems.containsKey(i.item.id)) {
                           if (!grouped.containsKey(o.order.id)) {
                             grouped[o.order.id] = [];
                           }
-                          grouped[o.order.id]!.add({
-                            'id': i.item.id,
-                            'quantity': selectedItems[i.item.id],
-                          });
+                          grouped[o.order.id]!.add(i.item.id);
                         }
                       }
                     }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart' as drift;
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
 import 'package:pos_system/features/order/cart_provider.dart';
@@ -25,7 +23,7 @@ class KioskScreen extends ConsumerStatefulWidget {
 }
 
 class _KioskScreenState extends ConsumerState<KioskScreen> {
-  int? _selectedCategoryId;
+  String? _selectedCategoryId;
 
   @override
   void initState() {
@@ -59,25 +57,25 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final orderNumber = 'K-ORD-$timestamp';
 
-      final order = OrdersCompanion(
-        orderNumber: drift.Value(orderNumber),
-        tableNumber: const drift.Value('Kiosk 1'),
-        type: drift.Value(cart.type),
-        totalAmount: drift.Value(cart.total),
-        status: const drift.Value('pending'),
-        paymentMethod: const drift.Value('pay_at_counter'),
-      );
-
       final orderItems = cart.items.map((item) {
-        return OrderItemsCompanion(
-          menuItemId: drift.Value(item.menuItem.id),
-          quantity: drift.Value(item.quantity),
-          priceAtTime: drift.Value(item.total / item.quantity),
-          status: const drift.Value('pending'),
-        );
+        return {
+          'menuItemId': item.menuItem.id,
+          'quantity': item.quantity,
+          'priceAtTime': item.total / item.quantity,
+          'status': 'pending',
+        };
       }).toList();
 
-      await orderRepo.submitOrder(order: order, items: orderItems);
+      await orderRepo.submitOrder(
+        orderNumber: orderNumber,
+        tableNumber: 'Kiosk 1',
+        type: cart.type,
+        status: 'pending',
+        totalAmount: cart.total,
+        taxAmount: 0.0,
+        serviceAmount: 0.0,
+        items: orderItems,
+      );
 
       // --- Print Receipt Logic ---
       if (mounted) {
@@ -89,14 +87,14 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
       try {
         final printerRepo = ref.read(printerRepositoryProvider);
         final printerService = ref.read(printerServiceProvider);
-        final savedPrinters = await printerRepo.getAllPrinters();
+        final savedPrinters = await printerRepo.getPrinters();
 
         final receiptPrinter = savedPrinters.firstWhere(
           (p) => p.role.contains('receipt'),
           orElse: () => savedPrinters.firstWhere(
             (p) => p.role.isEmpty,
-            orElse: () => const Printer(
-              id: -1,
+            orElse: () => PrinterModel(
+              id: '',
               name: '',
               macAddress: '',
               role: '',
@@ -105,7 +103,7 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
           ),
         );
 
-        if (receiptPrinter.id != -1) {
+        if (receiptPrinter.id.isNotEmpty) {
           if (receiptPrinter.macAddress.startsWith('SYSTEM:')) {
             final pdfBytes = await _generatePdfReceipt(orderNumber, cart);
             final systemPrinters = await printerService.scanSystemPrinters();
@@ -319,9 +317,7 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final categoriesStream = ref
-        .watch(menuRepositoryProvider)
-        .watchCategories(menuType: 'takeaway');
+    final categoriesFuture = ref.watch(menuRepositoryProvider).getCategories();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
@@ -338,8 +334,8 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Sidebar
-                      StreamBuilder<List<Category>>(
-                        stream: categoriesStream,
+                      FutureBuilder<List<CategoryModel>>(
+                        future: categoriesFuture,
                         builder: (context, snapshot) {
                           if (snapshot.hasError) {
                             return const SizedBox(width: 130);
@@ -351,7 +347,10 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                             );
                           }
 
-                          final categories = snapshot.data!;
+                          final allCategories = snapshot.data!;
+                          final categories = allCategories
+                              .where((c) => c.menuType == 'takeaway')
+                              .toList();
                           if (categories.isEmpty) {
                             return const SizedBox.shrink();
                           }
@@ -387,15 +386,12 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                             : Consumer(
                                 builder: (context, ref, child) {
                                   // Watch specific category items
-                                  final itemsStream = ref
+                                  final itemsFuture = ref
                                       .watch(menuRepositoryProvider)
-                                      .watchItemsByCategory(
-                                        _selectedCategoryId!,
-                                        type: 'takeaway',
-                                      );
+                                      .getItemsByCategory(_selectedCategoryId!);
 
-                                  return StreamBuilder<List<MenuItem>>(
-                                    stream: itemsStream,
+                                  return FutureBuilder<List<MenuItemModel>>(
+                                    future: itemsFuture,
                                     builder: (context, snapshot) {
                                       if (snapshot.hasError) {
                                         return Center(
@@ -410,8 +406,12 @@ class _KioskScreenState extends ConsumerState<KioskScreen> {
                                         );
                                       }
 
+                                      final items = snapshot.data!
+                                          .where((i) => i.type == 'takeaway')
+                                          .toList();
+
                                       return KioskMenuGrid(
-                                        items: snapshot.data!,
+                                        items: items,
                                         onItemSelected: (item) {
                                           ref
                                               .read(cartProvider.notifier)

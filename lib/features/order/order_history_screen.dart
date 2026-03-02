@@ -23,7 +23,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final allOrdersAsync = ref.watch(orderRepositoryProvider).watchAllOrders();
+    final allOrdersFuture = ref.watch(orderRepositoryProvider).getAllOrders();
 
     return Column(
       children: [
@@ -79,8 +79,8 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
 
         // Orders Table
         Expanded(
-          child: StreamBuilder(
-            stream: allOrdersAsync,
+          child: FutureBuilder<List<OrderModel>>(
+            future: allOrdersFuture,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return Center(child: Text('Error: ${snapshot.error}'));
@@ -96,8 +96,7 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                 final matchesSearch =
                     _searchController.text.isEmpty ||
                     order.orderNumber.contains(_searchController.text) ||
-                    (order.tableNumber?.contains(_searchController.text) ??
-                        false);
+                    order.tableNumber.contains(_searchController.text);
 
                 final matchesStatus =
                     _statusFilter == 'All Statuses' ||
@@ -139,7 +138,13 @@ class _OrderHistoryScreenState extends ConsumerState<OrderHistoryScreen> {
                             ),
                           ),
                           DataCell(Text(order.type)),
-                          DataCell(Text(order.tableNumber ?? '-')),
+                          DataCell(
+                            Text(
+                              order.tableNumber.isNotEmpty
+                                  ? order.tableNumber
+                                  : '-',
+                            ),
+                          ),
                           DataCell(Text('ID: ${order.waiterId}')),
                           DataCell(
                             Text('\$${order.totalAmount.toStringAsFixed(2)}'),

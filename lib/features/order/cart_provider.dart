@@ -1,9 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
+import 'package:pos_system/data/repositories/menu_repository.dart';
 
 // Simple cart state
 class CartItem {
-  final MenuItem menuItem;
+  final MenuItemModel menuItem;
   int quantity;
   String? note;
   double? overriddenPrice;
@@ -54,7 +54,7 @@ class CartNotifier extends Notifier<CartState> {
     state = state.copyWith(tableNumber: tableNumber);
   }
 
-  void addItem(MenuItem item) {
+  void addItem(MenuItemModel item) {
     if (item.status != 'active') return;
     final existingIndex = state.items.indexWhere(
       (i) => i.menuItem.id == item.id,
@@ -73,7 +73,7 @@ class CartNotifier extends Notifier<CartState> {
     }
   }
 
-  void updateItemNote(MenuItem item, String note) {
+  void updateItemNote(MenuItemModel item, String note) {
     final existingIndex = state.items.indexWhere(
       (i) => i.menuItem.id == item.id,
     );
@@ -90,7 +90,7 @@ class CartNotifier extends Notifier<CartState> {
     }
   }
 
-  void updateItemPrice(MenuItem item, double price) {
+  void updateItemPrice(MenuItemModel item, double price) {
     final existingIndex = state.items.indexWhere(
       (i) => i.menuItem.id == item.id,
     );
@@ -107,7 +107,7 @@ class CartNotifier extends Notifier<CartState> {
     }
   }
 
-  void removeItem(MenuItem item) {
+  void removeItem(MenuItemModel item) {
     final existingIndex = state.items.indexWhere(
       (i) => i.menuItem.id == item.id,
     );

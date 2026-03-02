@@ -2,19 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
-import 'package:pos_system/data/database/database.dart';
 
 class BillsScreen extends ConsumerWidget {
   const BillsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final paidOrdersStream = ref
-        .watch(orderRepositoryProvider)
-        .watchPaidOrders();
+    final paidOrdersFuture = ref.watch(orderRepositoryProvider).getPaidOrders();
 
-    return StreamBuilder(
-      stream: paidOrdersStream,
+    return FutureBuilder<List<OrderModel>>(
+      future: paidOrdersFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -29,15 +26,12 @@ class BillsScreen extends ConsumerWidget {
         }
 
         // Group by table and time (approximate)
-        // Since we now set completedAt to exact same time for batches, we can group strictly by time
-        final groupedMap = <String, List<Order>>{};
+        final groupedMap = <String, List<OrderModel>>{};
         for (var order in orders) {
-          // Key: Table_Time. If table is null, fallback to orderId (no grouping)
-          // Time is completedAt. If null (shouldn't be for paid), use createdAt
           final timeKey = (order.completedAt ?? order.createdAt)
               .millisecondsSinceEpoch
               .toString();
-          final tableKey = order.tableNumber ?? 'no_table';
+          final tableKey = order.tableNumber;
           final key = '${tableKey}_$timeKey';
 
           if (!groupedMap.containsKey(key)) {
@@ -87,9 +81,9 @@ class BillsScreen extends ConsumerWidget {
                       ),
                     ),
                     DataCell(Text(mainOrder.type)),
-                    DataCell(Text(mainOrder.tableNumber ?? '-')),
-                    DataCell(Text('ID: ${mainOrder.waiterId}')),
-                    DataCell(const Text('Cash/Card')), // Placeholder
+                    DataCell(Text(mainOrder.tableNumber)),
+                    DataCell(Text('ID: ${mainOrder.waiterId ?? "-"}')),
+                    DataCell(const Text('Cash/Card')),
                     DataCell(Text('\$${billTotal.toStringAsFixed(2)}')),
                     DataCell(
                       IconButton(
@@ -101,6 +95,7 @@ class BillsScreen extends ConsumerWidget {
                             ),
                           );
                         },
+                        tooltip: 'Reprint Receipt',
                       ),
                     ),
                   ],

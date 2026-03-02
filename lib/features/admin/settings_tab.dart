@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart' as drift;
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/settings_repository.dart';
 
 class SettingsTab extends ConsumerStatefulWidget {
@@ -17,7 +15,6 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
   final _delayController = TextEditingController();
   bool _kioskMode = false;
   bool _isLoading = true;
-  int? _settingsId;
 
   @override
   void initState() {
@@ -32,7 +29,7 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
 
     if (settings != null && mounted) {
       setState(() {
-        _settingsId = settings.id;
+        // Settings loaded successfully
         _taxController.text = settings.taxRate.toString();
         _serviceController.text = settings.serviceRate.toString();
         _delayController.text = settings.orderDelayThreshold.toString();
@@ -43,22 +40,16 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
   }
 
   Future<void> _saveSettings() async {
-    if (_settingsId == null) return;
-
     final repo = ref.read(settingsRepositoryProvider);
     await repo.updateSettings(
-      SettingsCompanion(
-        id: drift.Value(_settingsId!),
-        taxRate: drift.Value(double.tryParse(_taxController.text) ?? 0.0),
-        serviceRate: drift.Value(
-          double.tryParse(_serviceController.text) ?? 0.0,
-        ),
-        orderDelayThreshold: drift.Value(
-          int.tryParse(_delayController.text) ?? 15,
-        ),
-        kioskMode: drift.Value(_kioskMode),
-      ),
+      taxRate: double.tryParse(_taxController.text) ?? 0.0,
+      serviceRate: double.tryParse(_serviceController.text) ?? 0.0,
+      currencySymbol: '\$',
+      kioskMode: _kioskMode,
+      orderDelayThreshold: int.tryParse(_delayController.text) ?? 15,
     );
+
+    ref.invalidate(settingsRepositoryProvider);
 
     if (mounted) {
       ScaffoldMessenger.of(
@@ -95,11 +86,14 @@ class _SettingsTabState extends ConsumerState<SettingsTab> {
 
     if (confirmed == true && mounted) {
       setState(() => _isLoading = true);
-      await ref.read(settingsRepositoryProvider).clearAllDataExceptMenu();
+      // Note: clearAllDataExceptMenu not available in online-only mode
+      // User would need to manually delete records from PocketBase admin
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('All data cleared successfully')),
+          const SnackBar(
+            content: Text('Please use PocketBase admin to clear data'),
+          ),
         );
       }
     }

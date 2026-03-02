@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:pos_system/data/database/database.dart';
+import 'package:pos_system/data/repositories/menu_repository.dart';
 
 class KioskMenuGrid extends StatelessWidget {
-  final List<MenuItem> items;
-  final Function(MenuItem) onItemSelected;
+  final List<MenuItemModel> items;
+  final Function(MenuItemModel) onItemSelected;
 
   const KioskMenuGrid({
     super.key,
@@ -31,7 +31,7 @@ class KioskMenuGrid extends StatelessWidget {
 }
 
 class _MenuItemCard extends StatefulWidget {
-  final MenuItem item;
+  final MenuItemModel item;
   final VoidCallback onTap;
 
   const _MenuItemCard({required this.item, required this.onTap});

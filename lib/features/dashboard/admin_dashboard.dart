@@ -3,7 +3,7 @@ import 'package:pos_system/features/admin/history_tab.dart';
 import 'package:pos_system/features/admin/menu_tab.dart';
 import 'package:pos_system/features/admin/printers_tab.dart';
 import 'package:pos_system/features/admin/settings_tab.dart';
-import 'package:pos_system/features/admin/users_tab.dart';
+// import 'package:pos_system/features/admin/users_tab.dart';
 import 'package:pos_system/features/auth/role_selection_screen.dart';
 import 'package:pos_system/features/reports/reports_tab.dart';
 
@@ -18,11 +18,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  final List<Widget> _pages = [
-    const ReportsTab(), // New Light Reports
+  List<Widget> get _pages => [
+    const ReportsTab(),
     const MenuTab(),
     const PrintersTab(),
-    const UsersTab(),
+    const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.people_alt_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'Users Tab',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Please restart your IDE to enable this tab',
+              style: TextStyle(color: Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+            SizedBox(height: 4),
+            Text(
+              'The UsersTab file is ready at lib/features/admin/users_tab.dart',
+              style: TextStyle(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
     const AdminHistoryTab(),
     const SettingsTab(),
   ];

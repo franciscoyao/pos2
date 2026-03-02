@@ -1,12 +1,11 @@
-import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
+import 'package:pos_system/features/admin/categories_tab.dart';
 
 class EditCategoryDialog extends ConsumerStatefulWidget {
-  final Category? category;
+  final CategoryModel? category;
 
   const EditCategoryDialog({super.key, this.category});
 
@@ -19,6 +18,7 @@ class _EditCategoryDialogState extends ConsumerState<EditCategoryDialog> {
   late TextEditingController _nameController;
   late TextEditingController _sortOrderController;
   String _selectedType = 'dine-in';
+  String _selectedStation = 'kitchen';
 
   @override
   void initState() {
@@ -28,6 +28,7 @@ class _EditCategoryDialogState extends ConsumerState<EditCategoryDialog> {
       text: widget.category?.sortOrder.toString() ?? '0',
     );
     _selectedType = widget.category?.menuType ?? 'dine-in';
+    _selectedStation = widget.category?.station ?? 'kitchen';
   }
 
   @override
@@ -37,28 +38,34 @@ class _EditCategoryDialogState extends ConsumerState<EditCategoryDialog> {
     super.dispose();
   }
 
-  void _save() {
+  void _save() async {
     if (_formKey.currentState!.validate()) {
       final sortOrder = int.tryParse(_sortOrderController.text) ?? 0;
 
       if (widget.category == null) {
         // Add new category
-        final newCategory = CategoriesCompanion(
-          name: drift.Value(_nameController.text),
-          menuType: drift.Value(_selectedType),
-          sortOrder: drift.Value(sortOrder),
-        );
-        ref.read(menuRepositoryProvider).addCategory(newCategory);
+        await ref
+            .read(menuRepositoryProvider)
+            .addCategory(
+              name: _nameController.text,
+              menuType: _selectedType,
+              sortOrder: sortOrder,
+              station: _selectedStation,
+            );
       } else {
         // Update existing category
-        final updatedCategory = widget.category!.copyWith(
+        final updatedCategory = CategoryModel(
+          id: widget.category!.id,
           name: _nameController.text,
           menuType: _selectedType,
           sortOrder: sortOrder,
+          station: _selectedStation,
+          status: widget.category!.status,
         );
-        ref.read(menuRepositoryProvider).updateCategory(updatedCategory);
+        await ref.read(menuRepositoryProvider).updateCategory(updatedCategory);
       }
-      Navigator.pop(context);
+      ref.invalidate(categoriesProvider);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -113,6 +120,15 @@ class _EditCategoryDialogState extends ConsumerState<EditCategoryDialog> {
                   items: ['dine-in', 'takeaway'],
                   onChanged: (val) {
                     if (val != null) setState(() => _selectedType = val);
+                  },
+                ),
+                const SizedBox(height: 16),
+                _buildDropdown(
+                  label: 'Station',
+                  value: _selectedStation,
+                  items: ['kitchen', 'bar'],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _selectedStation = val);
                   },
                 ),
                 const SizedBox(height: 16),

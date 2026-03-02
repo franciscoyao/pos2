@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
 import 'package:pos_system/features/order/cart_provider.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
-import 'package:drift/drift.dart' show Value;
-
 import 'package:pos_system/data/repositories/report_repository.dart';
 
 class NewOrderScreen extends ConsumerStatefulWidget {
@@ -18,7 +15,7 @@ class NewOrderScreen extends ConsumerStatefulWidget {
 class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   final _searchController = TextEditingController();
   final _tableController = TextEditingController();
-  int? _selectedCategoryId;
+  String? _selectedCategoryId;
 
   @override
   void dispose() {
@@ -30,9 +27,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
-    final categoriesStream = ref
-        .watch(menuRepositoryProvider)
-        .watchCategories();
+    final categoriesFuture = ref.watch(menuRepositoryProvider).getCategories();
 
     // Listen to cart changes to update table controller if set externally
     ref.listen<CartState>(cartProvider, (previous, next) {
@@ -132,7 +127,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                     padding: const EdgeInsets.all(16),
                     child: _buildMenuContent(
                       cart,
-                      categoriesStream,
+                      categoriesFuture,
                       isMobile: true,
                     ),
                   ),
@@ -348,7 +343,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
                         padding: const EdgeInsets.all(24),
                         child: _buildMenuContent(
                           cart,
-                          categoriesStream,
+                          categoriesFuture,
                           isMobile: false,
                         ),
                       ),
@@ -375,7 +370,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
 
   Widget _buildMenuContent(
     CartState cart,
-    Stream<List<Category>> categoriesStream, {
+    Future<List<CategoryModel>> categoriesFuture, {
     required bool isMobile,
   }) {
     return Column(
@@ -450,8 +445,8 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
         const SizedBox(height: 24),
 
         // Categories
-        StreamBuilder<List<Category>>(
-          stream: categoriesStream,
+        FutureBuilder<List<CategoryModel>>(
+          future: categoriesFuture,
           builder: (context, snapshot) {
             if (snapshot.hasError || !snapshot.hasData) return const SizedBox();
             final categories = snapshot.data!;
@@ -543,28 +538,27 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
     try {
       final orderRepo = ref.read(orderRepositoryProvider);
 
-      // Create Order object
-      final order = OrdersCompanion.insert(
-        orderNumber: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
-        tableNumber: Value(cart.tableNumber),
-        status: const Value('pending'),
-        type: Value(cart.type),
-        totalAmount: Value(cart.total),
-      );
-
       // Create Order Items
       final orderItems = cart.items.map((item) {
-        return OrderItemsCompanion.insert(
-          orderId: 0, // Will be set by repository transaction
-          menuItemId: item.menuItem.id,
-          quantity: Value(item.quantity),
-          priceAtTime: item.menuItem.price,
-          // note: Value(item.note), // Note column missing in schema, skipping for now
-        );
+        return {
+          'menuItemId': item.menuItem.id,
+          'quantity': item.quantity,
+          'priceAtTime': item.menuItem.price,
+          'status': 'pending',
+        };
       }).toList();
 
       // Submit to database
-      await orderRepo.submitOrder(order: order, items: orderItems);
+      await orderRepo.submitOrder(
+        orderNumber: 'ORD-${DateTime.now().millisecondsSinceEpoch}',
+        tableNumber: cart.tableNumber ?? '',
+        type: cart.type,
+        status: 'pending',
+        totalAmount: cart.total,
+        taxAmount: 0.0,
+        serviceAmount: 0.0,
+        items: orderItems,
+      );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -592,7 +586,7 @@ class _NewOrderScreenState extends ConsumerState<NewOrderScreen> {
 // ... Sub-widgets (Grid, Cards, Pills) ...
 
 class _MenuGrid extends ConsumerWidget {
-  final int? selectedCategoryId;
+  final String? selectedCategoryId;
   final String searchQuery;
   final int crossAxisCount;
 
@@ -604,10 +598,10 @@ class _MenuGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final itemsStream = ref.watch(menuRepositoryProvider).watchAllItems();
+    final itemsFuture = ref.watch(menuRepositoryProvider).getAllItems();
 
-    return StreamBuilder<List<MenuItem>>(
-      stream: itemsStream,
+    return FutureBuilder<List<MenuItemModel>>(
+      future: itemsFuture,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
@@ -659,7 +653,7 @@ class _MenuGrid extends ConsumerWidget {
 }
 
 class _MenuItemCard extends ConsumerWidget {
-  final MenuItem item;
+  final MenuItemModel item;
 
   const _MenuItemCard({required this.item});
 

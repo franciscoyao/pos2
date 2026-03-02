@@ -49,4 +49,4 @@ final class OrderRepositoryProvider
   }
 }
 
-String _$orderRepositoryHash() => r'af91c4452271caaac5199d3495eb482245fe5bf0';
+String _$orderRepositoryHash() => r'69998729efc366238e4e9d5bef4b885643653f9c';

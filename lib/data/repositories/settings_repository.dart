@@ -1,73 +1,66 @@
-import 'package:drift/drift.dart';
-import 'package:pos_system/data/database/database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:pos_system/data/database/database_provider.dart';
 
 part 'settings_repository.g.dart';
 
+class SettingsModel {
+  final String id;
+  final double taxRate;
+  final double serviceRate;
+  final String currencySymbol;
+  final bool kioskMode;
+  final int orderDelayThreshold;
+
+  SettingsModel({
+    required this.id,
+    required this.taxRate,
+    required this.serviceRate,
+    required this.currencySymbol,
+    required this.kioskMode,
+    required this.orderDelayThreshold,
+  });
+}
+
+// Settings repository with local defaults (backend doesn't have settings API yet)
 class SettingsRepository {
-  final AppDatabase db;
+  SettingsRepository();
 
-  SettingsRepository(this.db);
-
-  Stream<SystemSetting> watchSettings() {
-    return (db.select(db.settings)..limit(1)).watchSingle().handleError((_) {
-      // If no settings exist, return default
-      // We should probably ensure a row exists on init
-    });
-  }
-
-  Future<SystemSetting?> getSettings() {
-    return (db.select(db.settings)..limit(1)).getSingleOrNull();
-  }
-
-  Future<void> updateSettings(SettingsCompanion settings) async {
-    final count = await db.settings.count().getSingle();
-    if (count == 0) {
-      await db.into(db.settings).insert(settings);
-    } else {
-      // Update the first row
-      final firstRow = await (db.select(db.settings)..limit(1)).getSingle();
-      await (db.update(
-        db.settings,
-      )..where((t) => t.id.equals(firstRow.id))).write(settings);
-    }
-  }
-
-  // Initialize default settings if needed
-  Future<void> initSettings() async {
-    final count = await db.settings.count().getSingle();
-    if (count == 0) {
-      await db
-          .into(db.settings)
-          .insert(
-            const SettingsCompanion(
-              taxRate: Value(10.0),
-              serviceRate: Value(5.0),
-              orderDelayThreshold: Value(15),
-              kioskMode: Value(false),
-            ),
-          );
-    }
-  }
-
-  Future<void> clearAllDataExceptMenu() async {
-    await db.delete(db.orderItems).go();
-    await db.delete(db.orders).go();
-    await db.delete(db.restaurantTables).go();
-
-    // Reset auto-increment counters
-    await db.customStatement(
-      "DELETE FROM sqlite_sequence WHERE name='order_items'",
+  Future<SettingsModel?> getSettings() async {
+    // Return default settings
+    return SettingsModel(
+      id: 'default',
+      taxRate: 10.0,
+      serviceRate: 5.0,
+      currencySymbol: '\$',
+      kioskMode: false,
+      orderDelayThreshold: 15,
     );
-    await db.customStatement("DELETE FROM sqlite_sequence WHERE name='orders'");
-    await db.customStatement(
-      "DELETE FROM sqlite_sequence WHERE name='restaurant_tables'",
+  }
+
+  Future<SettingsModel> updateSettings({
+    required double taxRate,
+    required double serviceRate,
+    required String currencySymbol,
+    required bool kioskMode,
+    required int orderDelayThreshold,
+  }) async {
+    debugPrint('Settings update not implemented in backend yet');
+    return SettingsModel(
+      id: 'default',
+      taxRate: taxRate,
+      serviceRate: serviceRate,
+      currencySymbol: currencySymbol,
+      kioskMode: kioskMode,
+      orderDelayThreshold: orderDelayThreshold,
     );
+  }
+
+  Future<SettingsModel> initSettings() async {
+    return getSettings().then((s) => s!);
   }
 }
 
 @Riverpod(keepAlive: true)
 SettingsRepository settingsRepository(Ref ref) {
-  return SettingsRepository(ref.watch(databaseProvider));
+  return SettingsRepository();
 }

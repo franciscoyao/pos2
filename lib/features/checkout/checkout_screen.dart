@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_system/core/theme/app_colors.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
 import 'package:pos_system/data/repositories/settings_repository.dart';
-import 'package:pos_system/data/database/database.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final String tableNumber;
@@ -22,7 +21,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   final _tipController = TextEditingController();
 
   // Split State
-  final Map<int, int> _selectedItems = {};
+  final Map<String, int> _selectedItems = {};
   int _splitCount = 2;
 
   @override
@@ -57,7 +56,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         }
 
         // Fetch settings to get dynamic tax and service rates
-        return FutureBuilder<SystemSetting?>(
+        return FutureBuilder<SettingsModel?>(
           future: ref.read(settingsRepositoryProvider).getSettings(),
           builder: (context, settingsSnapshot) {
             if (!settingsSnapshot.hasData) {
@@ -728,7 +727,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           return;
         }
 
-        final groupedItems = <int, List<Map<String, dynamic>>>{};
+        final groupedItems = <String, List<Map<String, dynamic>>>{};
         for (var orderDetail in ordersWithDetails) {
           for (var item in orderDetail.items) {
             if (_selectedItems.containsKey(item.item.id)) {
@@ -745,21 +744,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
         for (var orderId in groupedItems.keys) {
           await repo.payItems(orderId, groupedItems[orderId]!, _paymentMethod);
+
+          // After paying items, re-fetch the order items to check their status
+          final updatedOrderItems = await repo.getOrderItemsWithMenuForOrder(
+            orderId,
+          );
+          final allItemsInOrderPaid = updatedOrderItems.every(
+            (item) => item.item.status == 'paid',
+          );
+
+          if (allItemsInOrderPaid) {
+            await repo.updateOrderStatus(orderId, 'paid');
+          }
         }
       } else if (_splitOption == 'Equal') {
         final amountPerPerson = total / _splitCount;
-        // Pay equal amount on FIRST order (or distribute? Distributing is hard).
-        // We will just add payment to the first order for now, backend `addPayment` logic
-        // might need to handle "Table Payment" if we want to be robust.
-        // Current backend `addPayment` is per Order.
-        // If we have multiple orders, we should probably merge them first or just pick one.
-        // Let's pick the first one for payment.
         if (ordersWithDetails.isNotEmpty) {
           await repo.addPayment(
             ordersWithDetails.first.order.id,
             amountPerPerson,
             _paymentMethod,
           );
+          // If it's a full payment (splitCount == 1), mark the order as paid.
+          if (_splitCount == 1) {
+            await repo.updateOrderStatus(
+              ordersWithDetails.first.order.id,
+              'paid',
+            );
+          }
         }
       } else {
         // Full Payment
@@ -778,14 +790,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            _splitOption == 'None'
+            _splitOption == 'None' ||
+                    (_splitOption == 'Equal' && _splitCount == 1)
                 ? 'Payment processed'
                 : 'Partial Payment processed',
           ),
           backgroundColor: AppColors.success,
         ),
       );
-      if (_splitOption == 'None') {
+      if (_splitOption == 'None' ||
+          (_splitOption == 'Equal' && _splitCount == 1)) {
         Navigator.of(context).pop();
       } else {
         // If partial, maybe stay? Or refresh?

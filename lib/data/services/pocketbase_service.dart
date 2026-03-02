@@ -3,7 +3,6 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:pos_system/core/services/config_service.dart';
 
 final pocketBaseProvider = Provider<PocketBase>((ref) {
-  // Use the baseUrl from ConfigService
   final baseUrl = ConfigService.baseUrl;
   return PocketBase(baseUrl);
 });
@@ -19,8 +18,11 @@ class PocketBaseService {
   PocketBaseService(this.pb);
 
   // Auth
-  Future<void> login(String email, String password) async {
-    await pb.collection('users').authWithPassword(email, password);
+  Future<RecordModel> login(String email, String password) async {
+    final authData = await pb
+        .collection('users')
+        .authWithPassword(email, password);
+    return authData.record;
   }
 
   Future<void> logout() async {
@@ -30,27 +32,53 @@ class PocketBaseService {
   bool get isAuthenticated => pb.authStore.isValid;
   String? get userId => pb.authStore.record?.id;
 
+  // Connection check
+  Future<bool> checkConnection() async {
+    try {
+      await pb.health.check();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Generic CRUD wrappers
   Future<List<RecordModel>> getFullList(
     String collection, {
     String? expand,
+    String? filter,
+    String? sort,
   }) async {
-    return await pb.collection(collection).getFullList(expand: expand);
+    return await pb
+        .collection(collection)
+        .getFullList(expand: expand, filter: filter, sort: sort);
   }
 
   Future<RecordModel> create(
     String collection,
-    Map<String, dynamic> body,
-  ) async {
-    return await pb.collection(collection).create(body: body);
+    Map<String, dynamic> body, {
+    String? expand,
+  }) async {
+    return await pb.collection(collection).create(body: body, expand: expand);
   }
 
   Future<RecordModel> update(
     String collection,
     String id,
-    Map<String, dynamic> body,
-  ) async {
-    return await pb.collection(collection).update(id, body: body);
+    Map<String, dynamic> body, {
+    String? expand,
+  }) async {
+    return await pb
+        .collection(collection)
+        .update(id, body: body, expand: expand);
+  }
+
+  Future<RecordModel> getOne(
+    String collection,
+    String id, {
+    String? expand,
+  }) async {
+    return await pb.collection(collection).getOne(id, expand: expand);
   }
 
   Future<void> delete(String collection, String id) async {

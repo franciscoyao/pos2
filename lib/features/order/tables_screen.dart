@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pos_system/core/theme/app_colors.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/order_repository.dart';
 import 'package:pos_system/data/repositories/table_repository.dart';
 import 'package:pos_system/features/order/table_details_sidebar.dart';
@@ -14,14 +13,14 @@ class TablesScreen extends ConsumerStatefulWidget {
 }
 
 class _TablesScreenState extends ConsumerState<TablesScreen> {
-  RestaurantTable? _selectedTable;
+  RestaurantTableModel? _selectedTable;
 
   @override
   Widget build(BuildContext context) {
-    final tablesStream = ref.watch(tableRepositoryProvider).watchAllTables();
-    final activeOrdersStream = ref
+    final tablesFuture = ref.watch(tableRepositoryProvider).getTables();
+    final activeOrdersFuture = ref
         .watch(orderRepositoryProvider)
-        .watchActiveOrders();
+        .getActiveOrders();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -37,8 +36,8 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    StreamBuilder(
-                      stream: tablesStream,
+                    FutureBuilder<List<RestaurantTableModel>>(
+                      future: tablesFuture,
                       builder: (context, tablesSnapshot) {
                         if (tablesSnapshot.hasError) {
                           return Text('Error: ${tablesSnapshot.error}');
@@ -52,8 +51,8 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
                         final tables = tablesSnapshot.data!;
 
                         // We also need active orders to show status/totals
-                        return StreamBuilder(
-                          stream: activeOrdersStream,
+                        return FutureBuilder<List<OrderModel>>(
+                          future: activeOrdersFuture,
                           builder: (context, ordersSnapshot) {
                             final orders = ordersSnapshot.data ?? [];
 
@@ -252,7 +251,9 @@ class _TablesScreenState extends ConsumerState<TablesScreen> {
           ElevatedButton(
             onPressed: () {
               if (controller.text.isNotEmpty) {
-                ref.read(tableRepositoryProvider).addTable(controller.text);
+                ref
+                    .read(tableRepositoryProvider)
+                    .addTable(name: controller.text);
                 Navigator.pop(context);
               }
             },
@@ -355,7 +356,7 @@ class _DashedBorderPainter extends CustomPainter {
 }
 
 class _TableCard extends ConsumerWidget {
-  final RestaurantTable table;
+  final RestaurantTableModel table;
   final bool isActive;
   final int activeOrdersCount;
   final double totalAmount;

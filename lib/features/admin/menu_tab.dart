@@ -1,18 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:csv/csv.dart';
-import 'package:drift/drift.dart' hide Column;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
 import 'package:pos_system/features/admin/categories_tab.dart';
 import 'package:pos_system/features/admin/edit_menu_item_dialog.dart';
 
-final menuItemsProvider = StreamProvider<List<MenuItem>>((ref) {
-  return ref.watch(menuRepositoryProvider).watchAllItems();
+final menuItemsProvider = FutureProvider<List<MenuItemModel>>((ref) async {
+  return await ref.watch(menuRepositoryProvider).getAllItems();
 });
 
 class MenuTab extends ConsumerStatefulWidget {
@@ -69,7 +67,7 @@ class _MenuTabState extends ConsumerState<MenuTab>
         final menuRepo = ref.read(menuRepositoryProvider);
         final categories = await menuRepo.getCategories();
 
-        Map<String, int> categoryNameIdMap = {
+        Map<String, String> categoryNameIdMap = {
           for (var c in categories) c.name.toLowerCase(): c.id,
         };
 
@@ -89,28 +87,33 @@ class _MenuTabState extends ConsumerState<MenuTab>
                     row[6].toString().toLowerCase() == 'true')
               : false;
 
-          int catId;
+          String catId;
           if (categoryNameIdMap.containsKey(catName.toLowerCase())) {
             catId = categoryNameIdMap[catName.toLowerCase()]!;
           } else {
-            catId = await menuRepo.addCategory(
-              CategoriesCompanion(name: Value(catName)),
+            final newCat = await menuRepo.addCategory(
+              name: catName,
+              menuType: 'dine-in',
+              sortOrder: 0,
+              station: station,
             );
+            catId = newCat.id;
             categoryNameIdMap[catName.toLowerCase()] = catId;
           }
 
           await menuRepo.addItem(
-            MenuItemsCompanion(
-              code: Value(code.isEmpty ? null : code),
-              name: Value(name),
-              price: Value(price),
-              categoryId: Value(catId),
-              station: Value(station),
-              type: Value(type),
-              allowPriceEdit: Value(allowPriceEdit),
-            ),
+            code: code.isEmpty ? '' : code,
+            name: name,
+            price: price,
+            categoryId: catId,
+            station: station,
+            type: type,
+            allowPriceEdit: allowPriceEdit,
           );
         }
+
+        ref.invalidate(menuItemsProvider);
+        ref.invalidate(categoriesProvider);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -147,10 +150,10 @@ class _MenuTabState extends ConsumerState<MenuTab>
 
       for (var item in items) {
         rows.add([
-          item.code ?? '',
+          item.code,
           item.name,
           item.price,
-          categoryMap[item.categoryId] ?? '',
+          categoryMap[item.categoryId] ?? 'Unknown',
           item.station,
           item.type,
           item.allowPriceEdit ? 'Yes' : 'No',
@@ -218,10 +221,10 @@ class _MenuTabState extends ConsumerState<MenuTab>
                   ],
                   ...items.map(
                     (item) => [
-                      item.code ?? '',
+                      item.code,
                       item.name,
                       item.price.toStringAsFixed(2),
-                      categoryMap[item.categoryId] ?? '',
+                      categoryMap[item.categoryId] ?? 'Unknown',
                       item.station,
                       item.type,
                     ],
@@ -517,10 +520,9 @@ class _MenuTabState extends ConsumerState<MenuTab>
                       item.name.toLowerCase().contains(
                         _searchController.text.toLowerCase(),
                       ) ||
-                      (item.code?.toLowerCase().contains(
-                            _searchController.text.toLowerCase(),
-                          ) ??
-                          false);
+                      item.code.toLowerCase().contains(
+                        _searchController.text.toLowerCase(),
+                      );
 
                   final matchesStation =
                       _selectedStationFilter == 'All Stations' ||
@@ -595,7 +597,7 @@ class _MenuTabState extends ConsumerState<MenuTab>
                         cells: [
                           DataCell(
                             Text(
-                              item.code ?? '-',
+                              item.code,
                               style: const TextStyle(color: Colors.grey),
                             ),
                           ),
@@ -707,7 +709,7 @@ class _MenuTabState extends ConsumerState<MenuTab>
     );
   }
 
-  void _showEditDialog(MenuItem? item) {
+  void _showEditDialog(MenuItemModel? item) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -715,7 +717,7 @@ class _MenuTabState extends ConsumerState<MenuTab>
     );
   }
 
-  void _deleteItem(MenuItem item) {
+  void _deleteItem(MenuItemModel item) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -727,9 +729,10 @@ class _MenuTabState extends ConsumerState<MenuTab>
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () {
-              ref.read(menuRepositoryProvider).deleteItem(item.id);
-              Navigator.pop(context);
+            onPressed: () async {
+              await ref.read(menuRepositoryProvider).deleteItem(item.id);
+              ref.invalidate(menuItemsProvider);
+              if (context.mounted) Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),

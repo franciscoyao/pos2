@@ -16,14 +16,14 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _usernameController = TextEditingController();
-  final _pinController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _pinController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -133,18 +133,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       children: [
         if (widget.role == 'admin' || widget.role == 'waiter') ...[
           _buildTextField(
-            controller: _usernameController,
-            label: 'Username',
-            icon: Icons.person_outline_rounded,
+            controller: _emailController,
+            label: 'Email',
+            icon: Icons.email_outlined,
           ),
           const SizedBox(height: 16),
         ],
         _buildTextField(
-          controller: _pinController,
-          label: 'PIN',
+          controller: _passwordController,
+          label: 'Password',
           icon: Icons.lock_outline_rounded,
           isPassword: true,
-          isNumber: true,
+          // isNumber: true, // Removed number restriction
         ),
         const SizedBox(height: 24),
         SizedBox(
@@ -214,24 +214,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   void _handleLogin() async {
-    final username = _usernameController.text.trim();
-    final pin = _pinController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-    if (pin.length != 4) {
-      _showError('PIN must be 4 digits');
+    if (password.isEmpty) {
+      _showError('Password is required');
       return;
     }
 
-    if ((widget.role == 'admin' || widget.role == 'waiter') &&
-        username.isEmpty) {
-      _showError('Username is required');
+    if ((widget.role == 'admin' || widget.role == 'waiter') && email.isEmpty) {
+      _showError('Email is required');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final user = await ref.read(authRepositoryProvider).login(username, pin);
+      final user = await ref
+          .read(authRepositoryProvider)
+          .login(email, password);
 
       if (!mounted) return;
       setState(() => _isLoading = false);

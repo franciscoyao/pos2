@@ -16,10 +16,6 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stream = ref
-        .watch(orderRepositoryProvider)
-        .watchAllActiveOrdersWithItems();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
@@ -30,8 +26,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
               'Kitchen Orders',
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
-            StreamBuilder(
-              stream: stream,
+            FutureBuilder<List<OrderWithDetails>>(
+              future: ref.watch(orderRepositoryProvider).getActiveTables(),
               builder: (context, snapshot) {
                 final count = snapshot.data?.length ?? 0;
                 return Text(
@@ -78,8 +74,8 @@ class _KitchenScreenState extends ConsumerState<KitchenScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<List<OrderWithDetails>>(
-        stream: stream,
+      body: FutureBuilder<List<OrderWithDetails>>(
+        future: ref.watch(orderRepositoryProvider).getActiveTables(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));

@@ -49,4 +49,4 @@ final class TableRepositoryProvider
   }
 }
 
-String _$tableRepositoryHash() => r'1aadedaee87755a58501b124a95fd1cab6db830a';
+String _$tableRepositoryHash() => r'28e1bf8a3ea9c6423d61b9bd1d4e34655ebe4af0';

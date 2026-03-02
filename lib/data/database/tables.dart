@@ -6,6 +6,7 @@ class Users extends Table {
   TextColumn get remoteId => text().nullable().unique()();
   TextColumn get fullName => text().nullable()();
   TextColumn get username => text().unique().nullable()();
+  TextColumn get email => text().nullable().unique()(); // Added for email auth
   TextColumn get pin => text().nullable()(); // 4-digit PIN
   TextColumn get role =>
       text()(); // "admin", "waiter", "kitchen", "bar", "kiosk"
@@ -82,6 +83,7 @@ class OrderItems extends Table {
 @DataClassName('Printer')
 class Printers extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   TextColumn get name => text()();
   TextColumn get macAddress => text()();
   TextColumn get role => text()(); // "kitchen", "bar", "receipt"
@@ -91,6 +93,7 @@ class Printers extends Table {
 @DataClassName('SystemSetting')
 class Settings extends Table {
   IntColumn get id => integer().autoIncrement()();
+  TextColumn get remoteId => text().nullable().unique()();
   RealColumn get taxRate => real().withDefault(const Constant(0.0))();
   RealColumn get serviceRate => real().withDefault(const Constant(0.0))();
   TextColumn get currencySymbol => text().withDefault(const Constant('\$'))();

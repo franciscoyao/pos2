@@ -54,4 +54,4 @@ final class PrinterRepositoryProvider
   }
 }
 
-String _$printerRepositoryHash() => r'07487a4f44c68ed8edf7a48a8267f2c980ce39b0';
+String _$printerRepositoryHash() => r'8a28daa481a2ac96035340bf980ae4e82e70f4bc';

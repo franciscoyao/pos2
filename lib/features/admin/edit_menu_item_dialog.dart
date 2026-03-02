@@ -1,12 +1,11 @@
-import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
+import 'package:pos_system/features/admin/menu_tab.dart';
 
 class EditMenuItemDialog extends ConsumerStatefulWidget {
-  final MenuItem? item;
+  final MenuItemModel? item;
 
   const EditMenuItemDialog({super.key, this.item});
 
@@ -20,7 +19,7 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
   late TextEditingController _nameController;
   late TextEditingController _priceController;
 
-  int? _selectedCategoryId;
+  String? _selectedCategoryId;
   String _selectedStation = 'kitchen';
   String _selectedType = 'dine-in';
   bool _isAvailable = true;
@@ -49,7 +48,7 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
     super.dispose();
   }
 
-  void _save() {
+  void _save() async {
     if (_formKey.currentState!.validate()) {
       if (_selectedCategoryId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,21 +62,23 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
 
       if (widget.item == null) {
         // Add new item
-        final newItem = MenuItemsCompanion(
-          code: drift.Value(_codeController.text),
-          name: drift.Value(_nameController.text),
-          price: drift.Value(price),
-          categoryId: drift.Value(_selectedCategoryId!),
-          station: drift.Value(_selectedStation),
-          type: drift.Value(_selectedType),
-          status: drift.Value(status),
-          allowPriceEdit: drift.Value(_allowPriceEdit),
-        );
-        ref.read(menuRepositoryProvider).addItem(newItem);
+        await ref
+            .read(menuRepositoryProvider)
+            .addItem(
+              code: _codeController.text,
+              name: _nameController.text,
+              price: price,
+              categoryId: _selectedCategoryId!,
+              station: _selectedStation,
+              type: _selectedType,
+              allowPriceEdit: _allowPriceEdit,
+              status: status,
+            );
       } else {
         // Update existing item
-        final updatedItem = widget.item!.copyWith(
-          code: drift.Value(_codeController.text),
+        final updatedItem = MenuItemModel(
+          id: widget.item!.id,
+          code: _codeController.text,
           name: _nameController.text,
           price: price,
           categoryId: _selectedCategoryId!,
@@ -86,9 +87,10 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
           status: status,
           allowPriceEdit: _allowPriceEdit,
         );
-        ref.read(menuRepositoryProvider).updateItem(updatedItem);
+        await ref.read(menuRepositoryProvider).updateItem(updatedItem);
       }
-      Navigator.pop(context);
+      ref.invalidate(menuItemsProvider);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -281,6 +283,13 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
     required List<String> items,
     required ValueChanged<String?> onChanged,
   }) {
+    // Ensure value is in items list, or default to first item
+    if (!items.contains(value)) {
+      if (items.isNotEmpty) {
+        value = items.first;
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -327,11 +336,10 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
     );
   }
 
-  final categoriesFutureProvider = FutureProvider.autoDispose<List<Category>>((
-    ref,
-  ) {
-    return ref.watch(menuRepositoryProvider).getCategories();
-  });
+  final categoriesFutureProvider =
+      FutureProvider.autoDispose<List<CategoryModel>>((ref) {
+        return ref.watch(menuRepositoryProvider).getCategories();
+      });
 
   Widget _buildCategoryDropdown() {
     final categoriesAsync = ref.watch(categoriesFutureProvider);
@@ -356,7 +364,7 @@ class _EditMenuItemDialogState extends ConsumerState<EditMenuItemDialog> {
               ),
             ),
             const SizedBox(height: 8),
-            DropdownButtonFormField<int>(
+            DropdownButtonFormField<String>(
               initialValue: _selectedCategoryId,
               items: categories.map((cat) {
                 return DropdownMenuItem(value: cat.id, child: Text(cat.name));

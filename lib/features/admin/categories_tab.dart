@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pos_system/data/database/database.dart';
 import 'package:pos_system/data/repositories/menu_repository.dart';
 import 'package:pos_system/features/admin/edit_category_dialog.dart';
 import 'package:pos_system/features/admin/menu_tab.dart'; // Import for menuItemsProvider
 
-final categoriesProvider = StreamProvider<List<Category>>((ref) {
-  return ref.watch(menuRepositoryProvider).watchCategories();
+final categoriesProvider = FutureProvider<List<CategoryModel>>((ref) async {
+  return await ref.watch(menuRepositoryProvider).getCategories();
 });
 
 class CategoriesTab extends ConsumerWidget {
@@ -107,7 +106,11 @@ class CategoriesTab extends ConsumerWidget {
     );
   }
 
-  void _deleteCategory(BuildContext context, WidgetRef ref, Category category) {
+  void _deleteCategory(
+    BuildContext context,
+    WidgetRef ref,
+    CategoryModel category,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -121,9 +124,12 @@ class CategoriesTab extends ConsumerWidget {
             child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
-            onPressed: () {
-              ref.read(menuRepositoryProvider).deleteCategory(category.id);
-              Navigator.pop(context);
+            onPressed: () async {
+              await ref
+                  .read(menuRepositoryProvider)
+                  .deleteCategory(category.id);
+              ref.invalidate(categoriesProvider);
+              if (context.mounted) Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -135,7 +141,7 @@ class CategoriesTab extends ConsumerWidget {
 }
 
 class _CategoryCard extends StatelessWidget {
-  final Category category;
+  final CategoryModel category;
   final int itemCount;
   final VoidCallback onEdit;
   final VoidCallback onDelete;

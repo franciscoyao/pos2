@@ -17,8 +17,6 @@ class ConfigService {
   }
 
   static String get baseUrl {
-    // Default to localhost for emulator/local dev
-    // For production/release, this should be set in config.json
     return _config['baseUrl'] ?? 'http://localhost:3000';
   }
 }

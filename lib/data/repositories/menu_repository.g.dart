@@ -48,4 +48,4 @@ final class MenuRepositoryProvider
   }
 }
 
-String _$menuRepositoryHash() => r'e97c0f318af20352f6536a313e68609d484b1a54';
+String _$menuRepositoryHash() => r'5c357f365dd3a39293fed1d90cce02f4b75b23d1';

@@ -18,8 +18,8 @@ class RoleSelectionScreen extends ConsumerStatefulWidget {
 
 class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
   String _selectedRole = 'admin';
-  final _usernameController = TextEditingController();
-  final _pinController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _isLoading = false;
 
   final List<Map<String, dynamic>> _roles = [
@@ -36,33 +36,21 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _pinController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   void _handleLogin() async {
     final isQuickAccess = ['kitchen', 'bar', 'kiosk'].contains(_selectedRole);
 
-    // Quick Access Logic (No Auth required for demo/this specific flow as per previous implementation)
-    // However, the reference image shows Username/PIN fields even for the active tab.
-    // We will assume standard auth for Admin/Waiter and simplified/mock auth for others
-    // OR we will adapt the UI to hide fields if not needed.
-    // Looking at the image, it seems generic. Let's enforce PIN for everyone for security
-    // or keep the previous "Quick Access" pattern but maybe just ask for a PIN?
-    // For now, I'll allow "Quick Access" to bypass username but maybe require PIN if desired.
-    // Let's stick to the previous logic: Admin/Waiter need credentials. Others might just need a button or simple PIN.
-
-    // Actually, to match the UI perfectly, the form is always there.
-    // Let's assume we need at least a PIN for everyone, or just Username/PIN for Admin/Waiter.
-
     if (!isQuickAccess) {
-      if (_usernameController.text.isEmpty) {
-        _showError('Username is required');
+      if (_emailController.text.isEmpty) {
+        _showError('Email is required');
         return;
       }
-      if (_pinController.text.isEmpty) {
-        _showError('PIN is required');
+      if (_passwordController.text.isEmpty) {
+        _showError('Password is required');
         return;
       }
     }
@@ -80,7 +68,7 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
 
       final user = await ref
           .read(authRepositoryProvider)
-          .login(_usernameController.text.trim(), _pinController.text.trim());
+          .login(_emailController.text.trim(), _passwordController.text.trim());
 
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -316,7 +304,7 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                'Username',
+                                'Email',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
@@ -325,11 +313,11 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                             ),
                             const SizedBox(height: 8),
                             TextField(
-                              controller: _usernameController,
+                              controller: _emailController, // Updated
                               style: const TextStyle(color: Color(0xFF111827)),
                               cursorColor: const Color(0xFF111827),
                               decoration: InputDecoration(
-                                hintText: 'Enter username',
+                                hintText: 'Enter email',
                                 hintStyle: TextStyle(
                                   color: Colors.grey.shade400,
                                 ),
@@ -349,7 +337,7 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                'PIN',
+                                'Password',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14,
@@ -358,14 +346,13 @@ class _RoleSelectionScreenState extends ConsumerState<RoleSelectionScreen> {
                             ),
                             const SizedBox(height: 8),
                             TextField(
-                              controller: _pinController,
+                              controller: _passwordController, // Updated
                               obscureText: true,
-                              keyboardType: TextInputType.number,
-                              maxLength: 4,
+                              // keyboardType: TextInputType.number, // Removed number restriction
                               style: const TextStyle(color: Color(0xFF111827)),
                               cursorColor: const Color(0xFF111827),
                               decoration: InputDecoration(
-                                hintText: '4-digit PIN',
+                                hintText: 'Enter password',
                                 hintStyle: TextStyle(
                                   color: Colors.grey.shade400,
                                 ),

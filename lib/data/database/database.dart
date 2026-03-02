@@ -25,10 +25,13 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (migrator) async {
+      await migrator.createAll();
+    },
     onUpgrade: (migrator, from, to) async {
       if (from < 2) {
         // Migration from version 1 to 2: Add restaurant_tables table
@@ -79,6 +82,35 @@ class AppDatabase extends _$AppDatabase {
         // (orderItems covered in v8, but harmless to retry)
         await _safeAddRemoteId(migrator, orderItems, orderItems.remoteId);
       }
+      if (from < 10) {
+        // Migration to 10: SyncQueue removed in v14
+      }
+      if (from < 11) {
+        // Migration to 11: Force add remoteId to orders (fix for missing col)
+        await _safeAddRemoteId(migrator, orders, orders.remoteId);
+      }
+      if (from < 12) {
+        // Migration to 12: Add email to users
+        await _safeAddRemoteId(migrator, users, users.email);
+      }
+      if (from < 13) {
+        // Migration to 13: Create printers and settings tables
+        await migrator.createTable(printers);
+        await migrator.createTable(settings);
+      }
+      if (from < 14) {
+        // Drop SyncQueue table if it exists
+        try {
+          await customStatement('DROP TABLE IF EXISTS sync_queue');
+        } catch (e) {
+          // Table might not exist or already dropped
+        }
+      }
+      if (from < 15) {
+        // Ensure remoteId exists on printers and settings
+        await _safeAddRemoteId(migrator, settings, settings.remoteId);
+        await _safeAddRemoteId(migrator, printers, printers.remoteId);
+      }
     },
     beforeOpen: (details) async {
       // Enable foreign keys
@@ -89,10 +121,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> _safeAddRemoteId(
     Migrator m,
     TableInfo table,
-    GeneratedColumn col,
+    GeneratedColumn<dynamic> col,
   ) async {
     try {
-      await m.addColumn(table, col);
+      await m.addColumn(table, col as GeneratedColumn<Object>);
     } catch (e) {
       // Column likely exists
     }
@@ -105,7 +137,7 @@ LazyDatabase _openConnection() {
     // put the database file, called db.sqlite here, into the documents folder
     // for your app.
     final dbFolder = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dbFolder.path, 'pos_system.sqlite'));
+    final file = File(p.join(dbFolder.path, 'pos_system_v2.sqlite'));
     return NativeDatabase.createInBackground(file);
   });
 }
